@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title id="pageTitle">تدوين صفقاتي</title>
+    <meta name="description" content="منصة احترافية لتسجيل وتتبع صفقات تداول الذهب XAU/USD" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="auth.css" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico" />
+</head>
+
+<body>
+
+    <!-- ===== AUTH SCREEN ===== -->
+    <div id="authScreen">
+        <div class="auth-card">
+            <!-- Logo -->
+            <div class="auth-logo">
+                <span class="auth-logo-icon">⚡</span>
+                <span class="auth-logo-title">تدوين صفقاتي</span>
+                <span class="auth-logo-sub">منصة تداول الذهب XAU/USD</span>
+            </div>
+
+            <!-- Tabs -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tab-login" onclick="authShowTab('login')">تسجيل الدخول</button>
+                <button class="auth-tab" id="tab-register" onclick="authShowTab('register')">إنشاء حساب</button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm">
+                <form onsubmit="authHandleLogin(event)">
+                    <div class="auth-form-group">
+                        <label>اسم المستخدم</label>
+                        <input type="text" id="loginUsername" placeholder="أدخل اسم المستخدم" autocomplete="username" required />
+                    </div>
+                    <div class="auth-form-group">
+                        <label>كلمة السر</label>
+                        <input type="password" id="loginPassword" placeholder="أدخل كلمة السر" autocomplete="current-password" required />
+                    </div>
+                    <p class="auth-error" id="loginError"></p>
+                    <button type="submit" class="auth-submit-btn">🔐 تسجيل الدخول</button>
+                </form>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" style="display:none">
+                <form onsubmit="authHandleRegister(event)">
+                    <div class="auth-form-group">
+                        <label>الاسم الكامل</label>
+                        <input type="text" id="regFullname" placeholder="مثال: محمد أحمد" required />
+                    </div>
+                    <div class="auth-form-group">
+                        <label>اسم المستخدم</label>
+                        <input type="text" id="regUsername" placeholder="مثال: trader2025" required />
+                    </div>
+                    <div class="auth-form-group">
+                        <label>كلمة السر</label>
+                        <input type="password" id="regPassword" placeholder="6 أحرف على الأقل" required />
+                    </div>
+                    <p class="auth-message" id="registerMsg"></p>
+                    <button type="submit" class="auth-submit-btn">✨ إنشاء الحساب</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== APP WRAPPER ===== -->
+    <div id="appWrapper" style="display:none">
+
+        <!-- ===== SIDEBAR ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">⚡</span>
+                    <div class="logo-text">
+                        <span class="logo-title">تدوين صفقاتي</span>
+                        <span class="logo-sub" id="sidebarUserName">ابن حسام</span>
+                    </div>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle" title="إخفاء الشريط الجانبي">‹</button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">لوحة التحكم</span>
+                </button>
+                <button class="nav-item" data-page="accounts" id="nav-accounts">
+                    <span class="nav-icon">💼</span>
+                    <span class="nav-label">الحسابات</span>
+                </button>
+                <button class="nav-item" data-page="trades" id="nav-trades">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-label">الصفقات</span>
+                </button>
+                <button class="nav-item" data-page="gallery" id="nav-gallery">
+                    <span class="nav-icon">🖼️</span>
+                    <span class="nav-label">معرض البطاقات</span>
+                </button>
+                <button class="nav-item" data-page="stats" id="nav-stats">
+                    <span class="nav-icon">📉</span>
+                    <span class="nav-label">الإحصائيات</span>
+                </button>
+                <!-- Admin Only -->
+                <button class="nav-item" data-page="admin" id="nav-admin" style="display:none">
+                    <span class="nav-icon">👑</span>
+                    <span class="nav-label">المستخدمون</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="xau-ticker" id="xauTicker">
+                    <span class="ticker-label">XAU/USD</span>
+                    <span class="ticker-price" id="tickerPrice">جاري التحميل...</span>
+                </div>
+                <div class="sidebar-meta">
+                    <span id="currentDate"></span>
+                </div>
+                <!-- User Info + Logout -->
+                <div class="sidebar-user-info" id="sidebarUserInfo" style="margin-top:12px">
+                    <span class="sidebar-user-name" id="sidebarFullname">—</span>
+                    <span class="sidebar-user-role" id="sidebarRole">مستخدم</span>
+                </div>
+                <button class="btn-logout" onclick="authLogout()">
+                    <span>🚪</span> تسجيل الخروج
+                </button>
+            </div>
+        </aside>
+
+        <!-- ===== MAIN ===== -->
+        <main class="main" id="mainContent">
+
+            <!-- TOP BAR -->
+            <header class="topbar">
+                <button class="menu-btn" id="menuBtn">☰</button>
+                <div class="topbar-title" id="topbarTitle">لوحة التحكم</div>
+                <div class="topbar-actions">
+                    <button class="btn-primary" id="quickAddBtn" onclick="openTradeModal()">
+                        <span>＋</span> صفقة جديدة
+                    </button>
+                </div>
+            </header>
+
+            <!-- ===== PAGE: DASHBOARD ===== -->
+            <section class="page active" id="page-dashboard">
+                <div class="page-hero">
+                    <div class="hero-content">
+                        <h1 class="hero-title">📊 منصة تداول الذهب <span class="gold-text">XAU/USD</span></h1>
+                        <p class="hero-sub">مرحباً بك في نظامك الاحترافي لتتبع وتحليل صفقاتك</p>
+                    </div>
+                    <div class="hero-badge">
+                        <span class="badge-icon">🥇</span>
+                        <span id="heroUserName">ابن حسام</span>
+                    </div>
+                </div>
+
+                <!-- KPI CARDS -->
+                <div class="kpi-grid" id="kpiGrid">
+                    <div class="kpi-card kpi-total">
+                        <div class="kpi-icon">📋</div>
+                        <div class="kpi-info">
+                            <span class="kpi-label">إجمالي الصفقات</span>
+                            <span class="kpi-value" id="kpi-totalTrades">0</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card kpi-win">
+                        <div class="kpi-icon">🟢</div>
+                        <div class="kpi-info">
+                            <span class="kpi-label">صفقات رابحة</span>
+                            <span class="kpi-value" id="kpi-winTrades">0</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card kpi-loss">
+                        <div class="kpi-icon">🔴</div>
+                        <div class="kpi-info">
+                            <span class="kpi-label">صفقات خاسرة</span>
+                            <span class="kpi-value" id="kpi-lossTrades">0</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card kpi-pnl">
+                        <div class="kpi-icon">💰</div>
+                        <div class="kpi-info">
+                            <span class="kpi-label">صافي الربح / الخسارة</span>
+                            <span class="kpi-value" id="kpi-netPnL">$0.00</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card kpi-rate">
+                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-info">
+                            <span class="kpi-label">نسبة الفوز</span>
+                            <span class="kpi-value" id="kpi-winRate">0%</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card kpi-accounts">
+                        <div class="kpi-icon">💼</div>
+                        <div class="kpi-info">
+                            <span class="kpi-label">عدد الحسابات</span>
+                            <span class="kpi-value" id="kpi-accountsCount">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RECENT TRADES -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2 class="section-title">⚡ آخر الصفقات</h2>
+                        <button class="btn-ghost" onclick="switchPage('trades')">عرض الكل ←</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data-table" id="recentTradesTable">
+                            <thead>
+                                <tr>
+                                    <th>الصفقة</th>
+                                    <th>التاريخ</th>
+                                    <th>الحساب</th>
+                                    <th>الاتجاه</th>
+                                    <th>الدخول</th>
+                                    <th>الخروج</th>
+                                    <th>الربح/الخسارة</th>
+                                    <th>النتيجة</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentTradesBody">
+                                <tr>
+                                    <td colspan="8" class="empty-row">لا توجد صفقات بعد. ابدأ بإضافة صفقتك الأولى!</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ACCOUNTS OVERVIEW -->
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2 class="section-title">💼 ملخص الحسابات</h2>
+                        <button class="btn-ghost" onclick="switchPage('accounts')">إدارة الحسابات ←</button>
+                    </div>
+                    <div class="accounts-grid" id="dashAccountsGrid">
+                        <div class="empty-accounts">لا توجد حسابات بعد. أضف حسابك الأول!</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: ACCOUNTS ===== -->
+            <section class="page" id="page-accounts">
+                <div class="page-header-bar">
+                    <h1 class="page-title">💼 الحسابات</h1>
+                    <button class="btn-primary" onclick="openAccountModal()">＋ حساب جديد</button>
+                </div>
+                <div class="accounts-full-grid" id="accountsFullGrid">
+                    <div class="empty-state">
+                        <span class="empty-icon">💼</span>
+                        <p>لا توجد حسابات بعد</p>
+                        <button class="btn-primary" onclick="openAccountModal()">أضف حسابك الأول</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: TRADES TABLE ===== -->
+            <section class="page" id="page-trades">
+                <div class="page-header-bar">
+                    <h1 class="page-title">📈 جدول الصفقات</h1>
+                    <div class="filter-row">
+                        <select class="filter-select" id="filterAccount" onchange="renderTradesTable()">
+                            <option value="">كل الحسابات</option>
+                        </select>
+                        <select class="filter-select" id="filterDirection" onchange="renderTradesTable()">
+                            <option value="">كل الاتجاهات</option>
+                            <option value="شراء">شراء (Long)</option>
+                            <option value="بيع">بيع (Short)</option>
+                        </select>
+                        <select class="filter-select" id="filterResult" onchange="renderTradesTable()">
+                            <option value="">كل النتائج</option>
+                            <option value="ربح">رابحة</option>
+                            <option value="خسارة">خاسرة</option>
+                            <option value="تعادل">تعادل</option>
+                        </select>
+                        <button class="btn-primary" onclick="openTradeModal()">＋ صفقة جديدة</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table full-table" id="tradesTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th class="sortable" onclick="handleSort('title')">عنوان الصفقة <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('date')">التاريخ <span class="sort-icon">▼</span></th>
+                                <th class="sortable" onclick="handleSort('account')">الحساب <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('direction')">الاتجاه <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('entry')">الدخول <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('exit')">الخروج <span class="sort-icon"></span></th>
+                                <th>الهدف</th>
+                                <th>الستوب</th>
+                                <th class="sortable" onclick="handleSort('lot')">الحجم (لوت) <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('pipTP')">PIP الهدف <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('pipSL')">PIP الستوب <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('pnl')">الربح / الخسارة $ <span class="sort-icon"></span></th>
+                                <th class="sortable" onclick="handleSort('result')">النتيجة <span class="sort-icon"></span></th>
+                                <th>إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tradesTableBody">
+                            <tr>
+                                <td colspan="15" class="empty-row">لا توجد صفقات مسجلة</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- PAGINATION -->
+                <div class="pagination-container" id="tradesPagination">
+                    <button class="btn-ghost btn-icon" id="btnPrevPage" onclick="prevPage()" title="الصفحة السابقة">❮</button>
+                    <div class="page-numbers" id="pageNumbers"></div>
+                    <button class="btn-ghost btn-icon" id="btnNextPage" onclick="nextPage()" title="الصفحة التالية">❯</button>
+                    <div class="pagination-info">صفحة <span id="currentPageNum">1</span> من <span id="totalPagesNum">1</span> (<span id="totalItemsNum">0</span> صفقة)</div>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: GALLERY ===== -->
+            <section class="page" id="page-gallery">
+                <div class="page-header-bar">
+                    <h1 class="page-title">🖼️ معرض البطاقات</h1>
+                    <div class="filter-row">
+                        <select class="filter-select" id="galleryFilterAccount" onchange="renderGallery()">
+                            <option value="">كل الحسابات</option>
+                        </select>
+                        <select class="filter-select" id="galleryFilterResult" onchange="renderGallery()">
+                            <option value="">كل النتائج</option>
+                            <option value="ربح">رابحة</option>
+                            <option value="خسارة">خاسرة</option>
+                            <option value="تعادل">تعادل</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="gallery-grid" id="galleryGrid">
+                    <div class="empty-state">
+                        <span class="empty-icon">🖼️</span>
+                        <p>لا توجد صفقات بعد</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: STATS ===== -->
+            <section class="page" id="page-stats">
+                <div class="page-header-bar">
+                    <h1 class="page-title">📉 الإحصائيات التفصيلية</h1>
+                    <div class="filter-row">
+                        <select class="filter-select" id="statsFilterAccount" onchange="renderStats()">
+                            <option value="">كل الحسابات</option>
+                        </select>
+                        <select class="filter-select" id="statsFilterPeriod" onchange="renderStats()">
+                            <option value="">كل الفترات</option>
+                            <option value="7">آخر 7 أيام</option>
+                            <option value="30">آخر 30 يوم</option>
+                            <option value="90">آخر 3 أشهر</option>
+                            <option value="365">آخر سنة</option>
+                            <option value="custom">تحديد فترة مخصصة...</option>
+                        </select>
+                        <div id="customDateRange" style="display: none; align-items: center; gap: 8px;">
+                            <input type="date" id="statsStartDate" class="filter-select" onchange="renderStats()" title="من تاريخ">
+                            <span style="color: var(--text-secondary); font-size: 0.9rem;">إلى</span>
+                            <input type="date" id="statsEndDate" class="filter-select" onchange="renderStats()" title="إلى تاريخ">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WIN RATE BAR -->
+                <div class="section-card" id="statsWinRateCard">
+                    <div class="winrate-hero">
+                        <div class="winrate-circle" id="statsWinRateCircle">
+                            <span class="winrate-pct" id="statsWinRatePct">0%</span>
+                            <span class="winrate-label">نسبة الفوز</span>
+                        </div>
+                        <div class="winrate-kpis" id="statsKpiRow"></div>
+                    </div>
+                    <div class="winrate-bar-wrap">
+                        <div class="winrate-bar-track">
+                            <div class="winrate-bar-fill win" id="statsBarWin" style="width:0%"></div>
+                            <div class="winrate-bar-fill loss" id="statsBarLoss" style="width:0%"></div>
+                            <div class="winrate-bar-fill even" id="statsBarEven" style="width:0%"></div>
+                        </div>
+                        <div class="winrate-bar-legend">
+                            <span><span class="dot win"></span> رابحة</span>
+                            <span><span class="dot loss"></span> خاسرة</span>
+                            <span><span class="dot even"></span> تعادل</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <!-- CHARTS -->
+                    <div class="stat-card full-width-card">
+                        <h3>📈 منحنى النمو المالي (Equity Curve)</h3>
+                        <div class="chart-container">
+                            <canvas id="equityChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>📊 ملخص عام</h3>
+                        <div class="stat-rows" id="statGeneral"></div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>💰 الأداء المالي</h3>
+                        <div class="stat-rows" id="statFinancial"></div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>🎯 تحليل الاتجاه</h3>
+                        <div class="stat-rows" id="statDirection"></div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>📐 إحصائيات PIP</h3>
+                        <div class="stat-rows" id="statPip"></div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>🔥 تحليل متقدم</h3>
+                        <div class="stat-rows" id="statAdvanced"></div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>💼 إحصائيات الحسابات</h3>
+                        <div class="stat-rows" id="statAccounts"></div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2 class="section-title">🏆 أفضل وأسوأ صفقة</h2>
+                    </div>
+                    <div class="best-worst-grid" id="bestWorstGrid"></div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2 class="section-title">📅 التوزيع الشهري</h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                    <div id="monthlyBreakdown" style="margin-top: 15px;"></div>
+                </div>
+            </section>
+
+            <!-- ===== PAGE: ADMIN ===== -->
+            <section class="page" id="page-admin">
+                <div class="admin-page-header">
+                    <h1 class="admin-title">👑 إدارة المستخدمين</h1>
+                    <span class="admin-badge">🛡️ لوحة الأدمن</span>
+                </div>
+                <div class="section-card">
+                    <div id="adminUsersTable">
+                        <div class="empty-state">
+                            <span class="empty-icon">👥</span>
+                            <p>لا يوجد مستخدمون مسجلون بعد</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ===== MODAL: ADD TRADE ===== -->
+    <div class="modal-overlay" id="tradeModalOverlay" onclick="closeModalOnOverlay(event, 'tradeModalOverlay')">
+        <div class="modal" id="tradeModal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="tradeModalTitle">➕ إضافة صفقة جديدة</h2>
+                <button class="modal-close" onclick="closeTradeModal()">✕</button>
+            </div>
+            <form class="modal-form" id="tradeForm" onsubmit="saveTrade(event)">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>عنوان الصفقة *</label>
+                        <input type="text" id="t_title" placeholder="مثال: شراء ذهب 2025-03-14" required />
+                    </div>
+                    <div class="form-group">
+                        <label>الحساب *</label>
+                        <select id="t_account" required>
+                            <option value="">اختر حساباً</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>الاتجاه *</label>
+                        <select id="t_direction" required>
+                            <option value="">اختر</option>
+                            <option value="شراء">📈 شراء (Long)</option>
+                            <option value="بيع">📉 بيع (Short)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>تاريخ الصفقة *</label>
+                        <input type="date" id="t_date" required />
+                    </div>
+                    <div class="form-group">
+                        <label>سعر الدخول *</label>
+                        <input type="number" id="t_entry" step="0.01" placeholder="مثال: 2650.50" required />
+                    </div>
+                    <div class="form-group">
+                        <label>سعر الخروج</label>
+                        <input type="number" id="t_exit" step="0.01" placeholder="مثال: 2680.00" />
+                    </div>
+                    <div class="form-group">
+                        <label>سعر الهدف (TP)</label>
+                        <input type="number" id="t_target" step="0.01" placeholder="مثال: 2700.00" />
+                    </div>
+                    <div class="form-group">
+                        <label>سعر الستوب (SL)</label>
+                        <input type="number" id="t_stop" step="0.01" placeholder="مثال: 2630.00" />
+                    </div>
+                    <div class="form-group">
+                        <label>حجم العقد (لوت) *</label>
+                        <input type="number" id="t_lot" step="0.01" placeholder="مثال: 0.01" required />
+                    </div>
+                    <div class="form-group">
+                        <label>صورة الشارت</label>
+                        <input type="file" id="t_image" accept="image/*" class="file-input" />
+                    </div>
+                    <div class="form-group full-width">
+                        <label>ملاحظات</label>
+                        <textarea id="t_notes" rows="3" placeholder="أي ملاحظات إضافية عن الصفقة..."></textarea>
+                    </div>
+                </div>
+
+                <!-- PREVIEW CALCULATIONS -->
+                <div class="calc-preview" id="calcPreview">
+                    <h4>📊 معاينة الحسابات</h4>
+                    <div class="calc-row"><span>PIP الهدف:</span><span id="prev_pipTP">—</span></div>
+                    <div class="calc-row"><span>PIP الستوب:</span><span id="prev_pipSL">—</span></div>
+                    <div class="calc-row"><span>الربح/الخسارة المتوقع:</span><span id="prev_pnl">—</span></div>
+                    <div class="calc-row"><span>النتيجة:</span><span id="prev_result">—</span></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-ghost" onclick="closeTradeModal()">إلغاء</button>
+                    <button type="submit" class="btn-primary">💾 حفظ الصفقة</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: ADD ACCOUNT ===== -->
+    <div class="modal-overlay" id="accountModalOverlay" onclick="closeModalOnOverlay(event, 'accountModalOverlay')">
+        <div class="modal modal-sm" id="accountModal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="accountModalTitle">💼 إضافة حساب جديد</h2>
+                <button class="modal-close" onclick="closeAccountModal()">✕</button>
+            </div>
+            <form class="modal-form" id="accountForm" onsubmit="saveAccount(event)">
+                <div class="form-group">
+                    <label>اسم الحساب *</label>
+                    <input type="text" id="a_name" placeholder="مثال: حساب ريال ICMarkets" required />
+                </div>
+                <div class="form-group">
+                    <label>نوع الحساب *</label>
+                    <select id="a_type" required>
+                        <option value="">اختر النوع</option>
+                        <option value="حقيقي">💵 حقيقي</option>
+                        <option value="ديمو">🔵 تجريبي (Demo)</option>
+                        <option value="ممول">🏦 ممول (Funded)</option>
+                        <option value="باك تيست">🔄 باك تيست</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>الرصيد الأولي ($) *</label>
+                    <input type="number" id="a_balance" step="0.01" placeholder="مثال: 1000" required />
+                </div>
+                <div class="form-group">
+                    <label>ملاحظات</label>
+                    <textarea id="a_notes" rows="2" placeholder="أي ملاحظات عن الحساب..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-ghost" onclick="closeAccountModal()">إلغاء</button>
+                    <button type="submit" class="btn-primary">💾 حفظ الحساب</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: VIEW TRADE ===== -->
+    <div class="modal-overlay" id="viewModalOverlay" onclick="closeModalOnOverlay(event, 'viewModalOverlay')">
+        <div class="modal modal-lg" id="viewModal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="viewTradeTitle">تفاصيل الصفقة</h2>
+                <button class="modal-close" onclick="closeViewModal()">✕</button>
+            </div>
+            <div id="viewTradeContent"></div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <!-- CHART.JS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- SUPABASE -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+
+    <!-- AUTH SCRIPT (must be before app.js) -->
+    <script src="auth.js"></script>
+
+    <!-- APP SCRIPT -->
+    <script src="app.js"></script>
+</body>
+
+</html>
