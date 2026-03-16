@@ -481,8 +481,10 @@ async function saveTrade(e) {
         renderGallery();
         renderStats();
     } catch (err) {
-        console.error(err);
-        showToast('❌ حدث خطأ أثناء الحفظ');
+        console.error('Trade Insert Error:', err);
+        const msg = err.message || JSON.stringify(err);
+        showToast('❌ حدث خطأ: ' + msg);
+        alert('حدث خطأ أثناء حفظ الصفقة:\n' + msg + '\n\nتأكد من اختيار الحساب بشكل صحيح وتزامن البيانات.');
     } finally {
         btn.textContent = origText;
         btn.disabled = false;
@@ -508,7 +510,35 @@ async function deleteTrade(id) {
     }
 }
 
+async function resizeImageFile(file, maxSize = 800) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width;
+                let h = img.height;
+                if (w > maxSize || h > maxSize) {
+                    if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                    else { w = Math.round(w * maxSize / h); h = maxSize; }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 function fileToBase64(file) {
+    if (file && file.type && file.type.startsWith('image/')) {
+        return resizeImageFile(file);
+    }
     return new Promise((res, rej) => {
         const reader = new FileReader();
         reader.onload = () => res(reader.result);
@@ -562,6 +592,59 @@ function viewTrade(id) {
 
 function closeViewModal() {
     document.getElementById('viewModalOverlay').classList.remove('active');
+}
+
+// ============================================================
+// PROFILE MODAL
+// ============================================================
+function openProfileModal() {
+    const user = authCurrentUser();
+    if (!user) return;
+    
+    document.getElementById('p_fullname').value = user.fullname || '';
+    document.getElementById('p_username').value = user.username || '';
+    document.getElementById('p_password').value = ''; 
+    
+    document.getElementById('profileModalOverlay').classList.add('active');
+}
+
+function closeProfileModal() {
+    document.getElementById('profileModalOverlay').classList.remove('active');
+}
+
+async function saveProfile(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const origText = btn.textContent;
+    btn.textContent = 'جارٍ الحفظ...';
+    btn.disabled = true;
+
+    const fn = document.getElementById('p_fullname').value;
+    const un = document.getElementById('p_username').value;
+    const pw = document.getElementById('p_password').value;
+
+    const res = await authUpdateProfile(fn, un, pw);
+
+    btn.textContent = origText;
+    btn.disabled = false;
+
+    if (!res.success) {
+        showToast('❌ ' + res.message);
+        return;
+    }
+
+    showToast('✅ تم تحديث بياناتك بنجاح');
+    closeProfileModal();
+    
+    const user = authCurrentUser();
+    if (user) {
+        const sidebarFullname = document.getElementById('sidebarFullname');
+        const sidebarUserName = document.getElementById('sidebarUserName');
+        const heroUserName = document.getElementById('heroUserName');
+        if (sidebarFullname) sidebarFullname.textContent = user.fullname;
+        if (sidebarUserName) sidebarUserName.textContent = user.fullname.split(' ')[0];
+        if (heroUserName) heroUserName.textContent = user.fullname.split(' ')[0];
+    }
 }
 
 // ============================================================

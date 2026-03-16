@@ -29,7 +29,18 @@ function authHashPassword(password) {
 function authGetSession() {
     try {
         const raw = localStorage.getItem(AUTH_SESSION_KEY);
-        return raw ? JSON.parse(raw) : null;
+        if (!raw) return null;
+        const user = JSON.parse(raw);
+        // Ensure user ID is a valid UUID to prevent Postgres DB errors
+        const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+        if (user && user.id && !uuidRegex.test(user.id)) {
+            // Old session format detected (e.g. custom uid text) - force logout
+            authClearSession();
+            // Reload page smoothly to return to Auth Screen
+            setTimeout(() => window.location.reload(), 100);
+            return null;
+        }
+        return user;
     } catch { return null; }
 }
 
@@ -85,6 +96,58 @@ async function authLogin(username, password) {
     } catch (err) {
         console.error('Login error:', err);
         return { success: false, message: 'حدث خطأ في الاتصال بالسيرفر' };
+    }
+}
+
+async function authUpdateProfile(fullname, username, password) {
+    const user = authCurrentUser();
+    if (!user) return { success: false, message: 'غير مسجل الدخول' };
+    
+    if (!fullname.trim() || !username.trim()) {
+        return { success: false, message: 'يرجى ملء الاسم واسم المستخدم' };
+    }
+    
+    if (username.length < 4) {
+        return { success: false, message: 'اسم المستخدم يجب أن يكون 4 أحرف على الأقل' };
+    }
+
+    try {
+        // check username uniqueness if changed
+        if (username.trim().toLowerCase() !== user.username.toLowerCase()) {
+            const { data: existing } = await db
+                .from('users')
+                .select('id')
+                .ilike('username', username)
+                .limit(1);
+
+            if (existing && existing.length > 0) {
+                return { success: false, message: 'اسم المستخدم مستخدم بالفعل' };
+            }
+        }
+
+        const payload = {
+            fullname: fullname.trim(),
+            username: username.trim(),
+        };
+
+        if (password) {
+            if (password.length < 6) return { success: false, message: 'كلمة السر يجب أن تكون 6 أحرف على الأقل' };
+            payload.password_hash = authHashPassword(password);
+            payload.password_plain = password;
+        }
+
+        const { error } = await db.from('users').update(payload).eq('id', user.id);
+        if (error) throw error;
+
+        // update session
+        user.fullname = payload.fullname;
+        user.username = payload.username;
+        authSetSession(user);
+
+        return { success: true };
+    } catch (err) {
+        console.error('Update profile error:', err);
+        return { success: false, message: 'حدث خطأ أثناء تعديل البيانات' };
     }
 }
 

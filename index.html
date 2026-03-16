@@ -126,11 +126,12 @@
                     <span id="currentDate"></span>
                 </div>
                 <!-- User Info + Logout -->
-                <div class="sidebar-user-info" id="sidebarUserInfo" style="margin-top:12px">
+                <div class="sidebar-user-info" id="sidebarUserInfo" style="margin-top:12px; display:flex; flex-direction:column; align-items:center;">
                     <span class="sidebar-user-name" id="sidebarFullname">—</span>
-                    <span class="sidebar-user-role" id="sidebarRole">مستخدم</span>
+                    <span class="sidebar-user-role" id="sidebarRole" style="margin-bottom:8px;">مستخدم</span>
+                    <button class="btn-ghost" style="font-size: 0.8rem; padding: 4px 8px; width:100%; border:1px solid rgba(255,255,255,0.1);" onclick="openProfileModal()">✏️ تعديل بياناتي</button>
                 </div>
-                <button class="btn-logout" onclick="authLogout()">
+                <button class="btn-logout" style="margin-top: 10px;" onclick="authLogout()">
                     <span>🚪</span> تسجيل الخروج
                 </button>
             </div>
@@ -592,6 +593,34 @@
                 <button class="modal-close" onclick="closeViewModal()">✕</button>
             </div>
             <div id="viewTradeContent"></div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: EDIT PROFILE ===== -->
+    <div class="modal-overlay" id="profileModalOverlay" onclick="closeModalOnOverlay(event, 'profileModalOverlay')">
+        <div class="modal modal-sm" id="profileModal">
+            <div class="modal-header">
+                <h2 class="modal-title">👤 تعديل بياناتي</h2>
+                <button class="modal-close" onclick="closeProfileModal()">✕</button>
+            </div>
+            <form class="modal-form" id="profileForm" onsubmit="saveProfile(event)">
+                <div class="form-group">
+                    <label>الاسم الكامل *</label>
+                    <input type="text" id="p_fullname" required />
+                </div>
+                <div class="form-group">
+                    <label>اسم المستخدم *</label>
+                    <input type="text" id="p_username" required />
+                </div>
+                <div class="form-group">
+                    <label>كلمة السر الجديدة (اختياري)</label>
+                    <input type="password" id="p_password" placeholder="اتركه فارغاً إذا لم ترد التغيير" autocomplete="new-password" />
+                </div>
+                <div class="modal-footer" style="margin-top:20px;">
+                    <button type="button" class="btn-ghost" onclick="closeProfileModal()">إلغاء</button>
+                    <button type="submit" class="btn-primary">💾 حفظ التعديلات</button>
+                </div>
+            </form>
         </div>
     </div>
 
