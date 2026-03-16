@@ -199,7 +199,17 @@ function switchPage(page) {
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', () => switchPage(btn.dataset.page));
+    btn.addEventListener('click', () => {
+        switchPage(btn.dataset.page);
+        
+        // On mobile, close sidebar after clicking a nav item
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar && sidebar.classList.contains('mobile-open')) {
+            sidebar.classList.remove('mobile-open');
+            sidebar.classList.add('collapsed');
+            document.getElementById('mainContent').classList.remove('sidebar-collapsed');
+        }
+    });
 });
 
 document.getElementById('sidebarToggle').addEventListener('click', () => {
@@ -209,11 +219,29 @@ document.getElementById('sidebarToggle').addEventListener('click', () => {
     main.classList.toggle('sidebar-collapsed');
 });
 
-document.getElementById('menuBtn').addEventListener('click', () => {
+document.getElementById('menuBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
     const sidebar = document.getElementById('sidebar');
+    const main = document.getElementById('mainContent');
+    
     sidebar.classList.toggle('collapsed');
     sidebar.classList.toggle('mobile-open');
-    document.getElementById('mainContent').classList.toggle('sidebar-collapsed');
+    main.classList.toggle('sidebar-collapsed');
+});
+
+// Close sidebar on click outside in mobile
+document.addEventListener('click', (e) => {
+    const sidebar = document.getElementById('sidebar');
+    const menuBtn = document.getElementById('menuBtn');
+    
+    if (sidebar && sidebar.classList.contains('mobile-open')) {
+        // If click is not inside sidebar and not on the menu button
+        if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+            sidebar.classList.remove('mobile-open');
+            sidebar.classList.add('collapsed');
+            document.getElementById('mainContent').classList.remove('sidebar-collapsed');
+        }
+    }
 });
 
 // ============================================================
