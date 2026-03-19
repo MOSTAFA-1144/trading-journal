@@ -374,79 +374,103 @@
                     </div>
                 </div>
 
-                <!-- WIN RATE BAR -->
-                <div class="section-card" id="statsWinRateCard">
-                    <div class="winrate-hero">
-                        <div class="winrate-circle" id="statsWinRateCircle">
-                            <span class="winrate-pct" id="statsWinRatePct">0%</span>
-                            <span class="winrate-label">نسبة الفوز</span>
+                <div class="stats-main-grid">
+                    <div class="section-card" id="statsOverview">
+                        <div class="section-header">
+                            <h2 class="section-title">📉 الإحصائيات التفصيلية</h2>
                         </div>
-                        <div class="winrate-kpis" id="statsKpiRow"></div>
+                        <div class="winrate-hero">
+                            <div class="winrate-circle" id="winrateCircle">
+                                <div class="winrate-pct" id="winratePct">0%</div>
+                                <div class="winrate-label">نسبة الفوز</div>
+                            </div>
+                            <div class="winrate-kpis" id="winrateKpis">
+                                <!-- Dynamic KPIs -->
+                            </div>
+                        </div>
+                        <div class="winrate-bar-wrap">
+                            <div class="winrate-bar-track" id="winrateBar"></div>
+                            <div class="winrate-bar-legend">
+                                <span><span class="dot" style="background:var(--green)"></span> رابحة</span>
+                                <span><span class="dot" style="background:var(--red)"></span> خاسرة</span>
+                                <span><span class="dot" style="background:var(--text-muted)"></span> تعادل</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="winrate-bar-wrap">
-                        <div class="winrate-bar-track">
-                            <div class="winrate-bar-fill win" id="statsBarWin" style="width:0%"></div>
-                            <div class="winrate-bar-fill loss" id="statsBarLoss" style="width:0%"></div>
-                            <div class="winrate-bar-fill even" id="statsBarEven" style="width:0%"></div>
-                        </div>
-                        <div class="winrate-bar-legend">
-                            <span><span class="dot win"></span> رابحة</span>
-                            <span><span class="dot loss"></span> خاسرة</span>
-                            <span><span class="dot even"></span> تعادل</span>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="stats-grid">
-                    <!-- CHARTS -->
-                    <div class="stat-card full-width-card">
-                        <h3>📈 منحنى النمو المالي (Equity Curve)</h3>
-                        <div class="chart-container">
-                            <canvas id="equityChart"></canvas>
+                    <!-- Main Charts Row -->
+                    <div class="stats-charts-row single">
+                        <div class="section-card chart-card full-width">
+                            <div class="section-header">
+                                <h2 class="section-title">📈 منحنى النمو المالي</h2>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="equityChart"></canvas>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="stat-card">
-                        <h3>📊 ملخص عام</h3>
-                        <div class="stat-rows" id="statGeneral"></div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>💰 الأداء المالي</h3>
-                        <div class="stat-rows" id="statFinancial"></div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>🎯 تحليل الاتجاه</h3>
-                        <div class="stat-rows" id="statDirection"></div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>📐 إحصائيات PIP</h3>
-                        <div class="stat-rows" id="statPip"></div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>🔥 تحليل متقدم</h3>
-                        <div class="stat-rows" id="statAdvanced"></div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>💼 إحصائيات الحسابات</h3>
-                        <div class="stat-rows" id="statAccounts"></div>
-                    </div>
-                </div>
 
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2 class="section-title">🏆 أفضل وأسوأ صفقة</h2>
+                    <!-- Secondary row -->
+                    <div class="stats-secondary-grid single">
+                        <div class="section-card full-width">
+                            <div class="section-header">
+                                <h2 class="section-title">🧠 التحليل النفسي (الوسوم)</h2>
+                            </div>
+                            <div id="tagsAnalysis" class="tags-analysis-grid">
+                                <!-- Dynamic tags stats -->
+                            </div>
+                        </div>
                     </div>
-                    <div class="best-worst-grid" id="bestWorstGrid"></div>
-                </div>
 
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2 class="section-title">📅 التوزيع الشهري</h2>
+                    <!-- Best/Worst Trades -->
+                    <div class="section-card" id="bestWorstCard" style="display:none;">
+                        <div class="section-header">
+                            <h2 class="section-title">🏆 أفضل وأسوأ صفقة</h2>
+                        </div>
+                        <div class="best-worst-container" id="bestWorstContainer">
+                            <!-- Injected JS -->
+                        </div>
                     </div>
-                    <div class="chart-container">
-                        <canvas id="monthlyChart"></canvas>
+
+                    <!-- Comprehensive Metrics Grid -->
+                    <div class="comprehensive-stats-grid" id="comprehensiveGrid" style="display:none;">
+                        <div class="stat-card">
+                            <h3>🔍 ملخص عام</h3>
+                            <div class="stat-rows" id="statGeneral"></div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>💰 الأداء المالي</h3>
+                            <div class="stat-rows" id="statFinancial"></div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>🎯 تحليل الاتجاه</h3>
+                            <div class="stat-rows" id="statTrend"></div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>📐 إحصائيات PIP</h3>
+                            <div class="stat-rows" id="statPip"></div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>🔥 تحليل متقدم</h3>
+                            <div class="stat-rows" id="statAdvanced"></div>
+                        </div>
+                        <div class="stat-card stat-accounts-card">
+                            <h3>🎟️ إحصائيات الحسابات</h3>
+                            <div class="stat-rows" id="statAccounts"></div>
+                        </div>
                     </div>
-                    <div id="monthlyBreakdown" style="margin-top: 15px;"></div>
+
+                    <!-- Daily/Monthly tables -->
+                    <div class="stats-tables-row">
+                        <div class="section-card">
+                            <div class="section-header"><h2 class="section-title">📆 إحصاء يومي</h2></div>
+                            <div id="dailyBreakdown"></div>
+                        </div>
+                        <div class="section-card">
+                            <div class="section-header"><h2 class="section-title">📅 إحصاء شهري</h2></div>
+                            <div id="monthlyBreakdown"></div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -523,6 +547,18 @@
                     <div class="form-group">
                         <label>صورة الشارت</label>
                         <input type="file" id="t_image" accept="image/*" class="file-input" />
+                    </div>
+                    <div class="form-group full-width">
+                        <label>الوسوم النفسية (اختر ما ينطبق)</label>
+                        <div class="tags-input-container" id="tagsContainer">
+                            <label class="tag-checkbox"><input type="checkbox" value="التزام"> ⚖️ التزام</label>
+                            <label class="tag-checkbox"><input type="checkbox" value="تسرع"> ⚡ تسرع</label>
+                            <label class="tag-checkbox"><input type="checkbox" value="طمع"> 🤑 طمع</label>
+                            <label class="tag-checkbox"><input type="checkbox" value="خوف"> 😨 خوف</label>
+                            <label class="tag-checkbox"><input type="checkbox" value="صبر"> 🧘 صبر</label>
+                            <label class="tag-checkbox"><input type="checkbox" value="انتقام"> 😡 انتقام</label>
+                            <label class="tag-checkbox"><input type="checkbox" value="تخمين"> 🎲 تخمين</label>
+                        </div>
                     </div>
                     <div class="form-group full-width">
                         <label>ملاحظات</label>

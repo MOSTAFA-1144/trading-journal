@@ -22,6 +22,25 @@ let state = {
 // ============================================================
 // DATA SYNC (Supabase)
 // ============================================================
+async function fetchAllRecords(table, userId) {
+    let allData = [];
+    let start = 0;
+    const limit = 1000;
+    while (true) {
+        const { data, error } = await db.from(table)
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true })
+            .range(start, start + limit - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allData.push(...data);
+        if (data.length < limit) break;
+        start += limit;
+    }
+    return { data: allData, error: null };
+}
+
 async function loadState() {
     const user = authCurrentUser();
     if (!user) {
@@ -32,8 +51,8 @@ async function loadState() {
 
     try {
         const [accRes, trRes] = await Promise.all([
-            db.from('accounts').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
-            db.from('trades').select('*').eq('user_id', user.id).order('created_at', { ascending: true })
+            fetchAllRecords('accounts', user.id),
+            fetchAllRecords('trades', user.id)
         ]);
 
         if (accRes.error) throw accRes.error;
@@ -66,6 +85,7 @@ async function loadState() {
             result: t.result,
             notes: t.notes,
             image: t.image,
+            tags: t.tags || '',
             createdAt: t.created_at
         }));
     } catch (err) {
@@ -370,6 +390,12 @@ function openTradeModal(id) {
             document.getElementById('t_lot').value = tr.lot;
             document.getElementById('t_notes').value = tr.notes || '';
             document.getElementById('tradeModalTitle').textContent = '✏️ تعديل الصفقة';
+            
+            // Set tags
+            const tags = (tr.tags || '').split(',');
+            document.querySelectorAll('#tagsContainer input').forEach(cb => {
+                cb.checked = tags.includes(cb.value);
+            });
         }
     } else {
         document.getElementById('tradeModalTitle').textContent = '➕ إضافة صفقة جديدة';
@@ -478,10 +504,13 @@ async function saveTrade(e) {
             stop,
             lot,
             notes,
+            lot,
+            notes,
             pnl,
             pip_tp: pipTP,
             pip_sl: pipSL,
-            result
+            result,
+            tags: Array.from(document.querySelectorAll('#tagsContainer input:checked')).map(cb => cb.value).join(',')
         };
         if (imageDataUrl) dbPayload.image = imageDataUrl;
 
@@ -1083,11 +1112,9 @@ let equityChartInstance = null;
 let monthlyChartInstance = null;
 
 function renderStats() {
-    // Filters
     const accFilter = document.getElementById('statsFilterAccount')?.value || '';
     const periodFilter = document.getElementById('statsFilterPeriod')?.value || '0';
 
-    // Show/hide custom date range pickers
     const customDateContainer = document.getElementById('customDateRange');
     if (periodFilter === 'custom') {
         customDateContainer.style.display = 'flex';
@@ -1097,238 +1124,471 @@ function renderStats() {
         document.getElementById('statsEndDate').value = '';
     }
 
-    // Populate stats account filter dropdown
     const statsAccSel = document.getElementById('statsFilterAccount');
     if (statsAccSel) {
         const cur = statsAccSel.value;
         while (statsAccSel.options.length > 1) statsAccSel.remove(1);
         state.accounts.forEach(acc => statsAccSel.add(new Option(acc.name, acc.id)));
-        statsAccSel.value = cur || accFilter;
+        statsAccSel.value = cur;
     }
 
     let trades = [...state.trades];
     if (accFilter) trades = trades.filter(t => t.accountId === accFilter);
     
     if (periodFilter === 'custom') {
-        const startDateStr = document.getElementById('statsStartDate').value;
-        const endDateStr = document.getElementById('statsEndDate').value;
-        
-        if (startDateStr) {
-            const startStr = startDateStr + "T00:00:00";
-            const startTup = new Date(startStr).getTime();
-            trades = trades.filter(t => new Date(t.date).getTime() >= startTup);
-        }
-        if (endDateStr) {
-            const endStr = endDateStr + "T23:59:59";
-            const endTup = new Date(endStr).getTime();
-            trades = trades.filter(t => new Date(t.date).getTime() <= endTup);
-        }
+        const startStr = document.getElementById('statsStartDate').value;
+        const endStr = document.getElementById('statsEndDate').value;
+        if (startStr) trades = trades.filter(t => new Date(t.date).getTime() >= new Date(startStr + "T00:00:00").getTime());
+        if (endStr) trades = trades.filter(t => new Date(t.date).getTime() <= new Date(endStr + "T23:59:59").getTime());
     } else if (parseInt(periodFilter) > 0) {
-        const days = parseInt(periodFilter);
-        const cutoff = new Date(Date.now() - days * 86400000);
+        const cutoff = new Date(Date.now() - parseInt(periodFilter) * 86400000);
         trades = trades.filter(t => new Date(t.date) >= cutoff);
     }
 
-    const closed = trades.filter(t => t.pnl !== null && t.pnl !== undefined);
+    const closed = trades.filter(t => t.pnl !== null);
+    const netTotal = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+    
+    // Psychological Tags Analysis
+    const tagsMap = {};
+    closed.forEach(t => {
+        const ts = (t.tags || 'غير محدد').split(',');
+        ts.forEach(tag => {
+            if (!tag.trim()) return;
+            if (!tagsMap[tag]) tagsMap[tag] = { pnl: 0, wins: 0, count: 0 };
+            tagsMap[tag].count++;
+            tagsMap[tag].pnl += t.pnl;
+            if (t.pnl > 0) tagsMap[tag].wins++;
+        });
+    });
+
+    const tagAnalysisEl = document.getElementById('tagsAnalysis');
+    const sortedTags = Object.entries(tagsMap).sort((a,b) => b[1].pnl - a[1].pnl);
+    tagAnalysisEl.innerHTML = sortedTags.map(([name, d]) => `
+        <div class="tag-stat-card">
+            <span class="tag-name">${name}</span>
+            <span class="tag-pnl ${pnlClass(d.pnl)}">${fmtMoney(d.pnl)}</span>
+            <span class="tag-winrate">فوز: ${Math.round((d.wins/d.count)*100)}% (${d.count})</span>
+        </div>
+    `).join('') || '<div style="color:var(--text-muted);padding:20px">لا يوجد بيانات للوسوم بعد</div>';
+
     const wins = closed.filter(t => t.pnl > 0);
     const losses = closed.filter(t => t.pnl < 0);
-    const evens = closed.filter(t => t.pnl === 0);
-    const netTotal = closed.reduce((s, t) => s + (t.pnl || 0), 0);
-
     const winRate = closed.length ? Math.round((wins.length / closed.length) * 100) : 0;
-    const lossRate = closed.length ? Math.round((losses.length / closed.length) * 100) : 0;
-    const evenRate = closed.length ? Math.round((evens.length / closed.length) * 100) : 0;
-    const avgWin = wins.length ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0;
-    const avgLoss = losses.length ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
-    const avgPnL = closed.length ? netTotal / closed.length : 0;
-    const avgLot = trades.length ? (trades.reduce((s, t) => s + (t.lot || 0), 0) / trades.length).toFixed(2) : '—';
+    
+    const winsCount = wins.length;
+    const lossesCount = losses.length;
+    const evensCount = closed.length - winsCount - lossesCount;
 
-    const totalWinAmt = wins.reduce((s, t) => s + t.pnl, 0);
-    const totalLossAmt = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
-    const profitFactor = totalLossAmt > 0 ? (totalWinAmt / totalLossAmt).toFixed(2)
-        : wins.length ? '\u221e' : '—';
+    const winPct = closed.length ? Math.round((winsCount / closed.length) * 100) : 0;
+    const lossPct = closed.length ? Math.round((lossesCount / closed.length) * 100) : 0;
+    const evenPct = closed.length ? Math.round((evensCount / closed.length) * 100) : 0;
 
-    const bestTr = closed.length ? closed.reduce((a, b) => a.pnl > b.pnl ? a : b) : null;
-    const worstTr = closed.length ? closed.reduce((a, b) => a.pnl < b.pnl ? a : b) : null;
-
-    // PIP stats
-    const withTP = closed.filter(t => t.pipTP !== null && t.pipTP !== undefined);
-    const withSL = closed.filter(t => t.pipSL !== null && t.pipSL !== undefined);
-    const avgPipTP = withTP.length ? (withTP.reduce((s, t) => s + t.pipTP, 0) / withTP.length).toFixed(1) : '—';
-    const avgPipSL = withSL.length ? (withSL.reduce((s, t) => s + t.pipSL, 0) / withSL.length).toFixed(1) : '—';
-    const rrRatio = (avgPipSL !== '—' && avgPipTP !== '—' && avgPipSL > 0)
-        ? (avgPipTP / avgPipSL).toFixed(2) : '—';
-
-    // Consecutive wins/losses
-    let maxW = 0, maxL = 0, curW = 0, curL = 0;
-    [...closed].sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(t => {
-        if (t.pnl > 0) { curW++; curL = 0; maxW = Math.max(maxW, curW); }
-        else if (t.pnl < 0) { curL++; curW = 0; maxL = Math.max(maxL, curL); }
-        else { curW = 0; curL = 0; }
-    });
-
-    const buyTrades = trades.filter(t => t.direction === '\u0634\u0631\u0627\u0621');
-    const sellTrades = trades.filter(t => t.direction === '\u0628\u064a\u0639');
-    const buyWins = buyTrades.filter(t => t.pnl > 0).length;
-    const sellWins = sellTrades.filter(t => t.pnl > 0).length;
-    const buyNet = buyTrades.filter(t => t.pnl).reduce((s, t) => s + t.pnl, 0);
-    const sellNet = sellTrades.filter(t => t.pnl).reduce((s, t) => s + t.pnl, 0);
-
-    // Win rate circle
-    const deg = Math.round(winRate * 3.6);
-    document.getElementById('statsWinRatePct').textContent = winRate + '%';
-    document.getElementById('statsWinRateCircle').style.background =
-        `conic-gradient(var(--gold) ${deg}deg, var(--bg-hover) ${deg}deg)`;
-    document.getElementById('statsBarWin').style.width = winRate + '%';
-    document.getElementById('statsBarLoss').style.width = lossRate + '%';
-    document.getElementById('statsBarEven').style.width = evenRate + '%';
-
-    document.getElementById('statsKpiRow').innerHTML = [
-        ['\uD83D\uDCCB \u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u0635\u0641\u0642\u0627\u062A', trades.length, ''],
-        ['\uD83D\uDFE2 \u0631\u0627\u0628\u062D\u0629', wins.length, 'pnl-pos'],
-        ['\uD83D\uDD34 \u062E\u0627\u0633\u0631\u0629', losses.length, 'pnl-neg'],
-        ['\uD83D\uDCB0 \u0635\u0627\u0641\u064A P&L', fmtMoney(netTotal), pnlClass(netTotal)],
-        ['\u2696\uFE0F \u0639\u0627\u0645\u0644 \u0627\u0644\u0631\u0628\u062D', profitFactor, ''],
-        ['\uD83D\uDCCA \u0645\u062A\u0648\u0633\u0637 \u0635\u0641\u0642\u0629', fmtMoney(avgPnL), pnlClass(avgPnL)],
-    ].map(([l, v, cls]) => `<div class="wkpi-item"><span class="wkpi-label">${l}</span><span class="wkpi-val ${cls}">${v}</span></div>`).join('');
-
-    const sRow = (l, v, cls = '') =>
-        `<div class="stat-row"><span class="stat-row-label">${l}</span><span class="stat-row-val ${cls}">${v}</span></div>`;
-
-    // Render Charts
-    renderCharts(closed);
-
-    document.getElementById('statGeneral').innerHTML = [
-        ['\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u0635\u0641\u0642\u0627\u062A', trades.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u0645\u063A\u0644\u0642\u0629', closed.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u0645\u0641\u062A\u0648\u062D\u0629', trades.length - closed.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u0631\u0627\u0628\u062D\u0629 \uD83D\uDFE2', wins.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u062E\u0627\u0633\u0631\u0629 \uD83D\uDD34', losses.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u062A\u0639\u0627\u062F\u0644 \u26AA', evens.length],
-        ['\u0646\u0633\u0628\u0629 \u0627\u0644\u0641\u0648\u0632', winRate + '%'],
-        ['\u0646\u0633\u0628\u0629 \u0627\u0644\u062E\u0633\u0627\u0631\u0629', lossRate + '%'],
-        ['\u0639\u062F\u062F \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A', state.accounts.length],
-    ].map(([l, v]) => sRow(l, v)).join('');
-
-    document.getElementById('statFinancial').innerHTML = [
-        ['\u0635\u0627\u0641\u064A P/L', fmtMoney(netTotal), pnlClass(netTotal)],
-        ['\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u0623\u0631\u0628\u0627\u062D', fmtMoney(totalWinAmt), 'pnl-pos'],
-        ['\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u062E\u0633\u0627\u0626\u0631', '-$' + totalLossAmt.toFixed(2), 'pnl-neg'],
-        ['\u0645\u062A\u0648\u0633\u0637 \u0631\u0628\u062D / \u0635\u0641\u0642\u0629', fmtMoney(avgPnL), pnlClass(avgPnL)],
-        ['\u0645\u062A\u0648\u0633\u0637 \u0627\u0644\u0631\u0627\u0628\u062D\u0629', fmtMoney(avgWin), 'pnl-pos'],
-        ['\u0645\u062A\u0648\u0633\u0637 \u0627\u0644\u062E\u0627\u0633\u0631\u0629', fmtMoney(avgLoss), 'pnl-neg'],
-        ['\u0639\u0627\u0645\u0644 \u0627\u0644\u0631\u0628\u062D (Profit Factor)', profitFactor],
-        ['\u0645\u062A\u0648\u0633\u0637 \u062D\u062C\u0645 \u0627\u0644\u0644\u0648\u062A', avgLot],
-    ].map(([l, v, cls = '']) => sRow(l, v, cls)).join('');
-
-    document.getElementById('statDirection').innerHTML = [
-        ['\u0635\u0641\u0642\u0627\u062A \u0634\u0631\u0627\u0621 (Long)', buyTrades.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u0628\u064A\u0639 (Short)', sellTrades.length],
-        ['\u0631\u0627\u0628\u062D\u0629 \u0634\u0631\u0627\u0621', buyWins],
-        ['\u0631\u0627\u0628\u062D\u0629 \u0628\u064A\u0639', sellWins],
-        ['\u0646\u0633\u0628\u0629 \u0641\u0648\u0632 \u0634\u0631\u0627\u0621', buyTrades.length ? Math.round((buyWins / buyTrades.length) * 100) + '%' : '\u2014'],
-        ['\u0646\u0633\u0628\u0629 \u0641\u0648\u0632 \u0628\u064A\u0639', sellTrades.length ? Math.round((sellWins / sellTrades.length) * 100) + '%' : '\u2014'],
-        ['\u0631\u0628\u062D \u0634\u0631\u0627\u0621 \u0625\u062C\u0645\u0627\u0644\u064A', fmtMoney(buyNet), pnlClass(buyNet)],
-        ['\u0631\u0628\u062D \u0628\u064A\u0639 \u0625\u062C\u0645\u0627\u0644\u064A', fmtMoney(sellNet), pnlClass(sellNet)],
-    ].map(([l, v, cls = '']) => sRow(l, v, cls)).join('');
-
-    document.getElementById('statPip').innerHTML = [
-        ['\u0645\u062A\u0648\u0633\u0637 PIP \u0627\u0644\u0647\u062F\u0641', avgPipTP !== '\u2014' ? avgPipTP + ' pip' : '\u2014'],
-        ['\u0645\u062A\u0648\u0633\u0637 PIP \u0627\u0644\u0633\u062A\u0648\u0628', avgPipSL !== '\u2014' ? avgPipSL + ' pip' : '\u2014'],
-        ['\u0646\u0633\u0628\u0629 R:R \u0627\u0644\u0645\u062A\u0648\u0633\u0637\u0629', rrRatio !== '\u2014' ? '1 : ' + rrRatio : '\u2014'],
-        ['\u0635\u0641\u0642\u0627\u062A \u0628\u0647\u062F\u0641 \u0645\u062D\u062F\u062F', withTP.length],
-        ['\u0635\u0641\u0642\u0627\u062A \u0628\u0633\u062A\u0648\u0628 \u0645\u062D\u062F\u062F', withSL.length],
-    ].map(([l, v]) => sRow(l, v)).join('');
-
-    document.getElementById('statAdvanced').innerHTML = [
-        ['\u0623\u0637\u0648\u0644 \u0633\u0644\u0633\u0644\u0629 \u0631\u0627\u0628\u062D\u0629', maxW + ' \u0635\u0641\u0642\u0627\u062A'],
-        ['\u0623\u0637\u0648\u0644 \u0633\u0644\u0633\u0644\u0629 \u062E\u0627\u0633\u0631\u0629', maxL + ' \u0635\u0641\u0642\u0627\u062A'],
-        ['\u0646\u0633\u0628\u0629 \u0627\u0644\u0641\u0648\u0632', winRate + '%'],
-        ['\u0646\u0633\u0628\u0629 \u0627\u0644\u062A\u0639\u0627\u062F\u0644', evenRate + '%'],
-        ['\u0623\u0641\u0636\u0644 \u0635\u0641\u0642\u0629', bestTr ? fmtMoney(bestTr.pnl) : '\u2014'],
-        ['\u0623\u0633\u0648\u0623 \u0635\u0641\u0642\u0629', worstTr ? fmtMoney(worstTr.pnl) : '\u2014'],
-    ].map(([l, v]) => sRow(l, v)).join('');
-
-    document.getElementById('statAccounts').innerHTML = state.accounts.map(acc => {
-        const at = tradesByAccount(acc.id).filter(t => !accFilter || t.accountId === accFilter);
-        const cl = at.filter(t => t.pnl !== null && t.pnl !== undefined);
-        const nt = cl.reduce((s, t) => s + t.pnl, 0);
-        const wr = cl.length ? Math.round((cl.filter(t => t.pnl > 0).length / cl.length) * 100) : 0;
-        return `<div class="stat-row" style="flex-direction:column;align-items:flex-start;gap:4px">
-            <div style="display:flex;width:100%;justify-content:space-between">
-                <span class="stat-row-label">${acc.name} <span style="font-size:.7rem;opacity:.6">(${acc.type})</span></span>
-                <span class="stat-row-val ${pnlClass(nt)}">${fmtMoney(nt)}</span>
-            </div>
-            <div style="font-size:.73rem;color:var(--text-muted)">${cl.length} \u0635\u0641\u0642\u0629 | \u0641\u0648\u0632 ${wr}%</div>
-        </div>`;
-    }).join('') || sRow('\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0633\u0627\u0628\u0627\u062A', '\u2014');
-
-    // Best/Worst
-    const bwGrid = document.getElementById('bestWorstGrid');
-    if (!bestTr) {
-        bwGrid.innerHTML = '<div style="color:var(--text-muted);padding:20px">\u0644\u0627 \u062A\u0648\u062C\u062F \u0635\u0641\u0642\u0627\u062A \u0645\u063A\u0644\u0642\u0629 \u0628\u0639\u062F</div>';
-    } else {
-        bwGrid.innerHTML = `
-        <div class="bw-card best">
-            <div class="bw-label" style="color:var(--green)">\uD83C\uDFC6 \u0623\u0641\u0636\u0644 \u0635\u0641\u0642\u0629</div>
-            <div class="bw-title">${bestTr.title}</div>
-            <div class="bw-val" style="color:var(--green)">${fmtMoney(bestTr.pnl)}</div>
-            <div style="font-size:.8rem;margin-top:6px;opacity:.7">${formatDate(bestTr.date)}</div>
-        </div>
-        <div class="bw-card worst">
-            <div class="bw-label" style="color:var(--red)">\uD83D\uDCC9 \u0623\u0633\u0648\u0623 \u0635\u0641\u0642\u0629</div>
-            <div class="bw-title">${worstTr.title}</div>
-            <div class="bw-val" style="color:var(--red)">${fmtMoney(worstTr.pnl)}</div>
-            <div style="font-size:.8rem;margin-top:6px;opacity:.7">${formatDate(worstTr.date)}</div>
-        </div>`;
+    const pctEl = document.getElementById('winratePct');
+    if (pctEl) pctEl.textContent = winPct + '%';
+    
+    const circleEl = document.getElementById('winrateCircle');
+    if (circleEl) {
+        circleEl.style.background = `conic-gradient(var(--gold) ${winPct * 3.6}deg, var(--bg-hover) ${winPct * 3.6}deg)`;
     }
 
-    // Monthly Breakdown
-    const monthlyMap = {};
-    closed.forEach(t => {
-        const key = t.date ? t.date.slice(0, 7) : 'other';
-        if (!monthlyMap[key]) monthlyMap[key] = { wins: 0, losses: 0, net: 0, count: 0 };
-        monthlyMap[key].count++;
-        monthlyMap[key].net += t.pnl;
-        if (t.pnl > 0) monthlyMap[key].wins++;
-        else if (t.pnl < 0) monthlyMap[key].losses++;
+    const barEl = document.getElementById('winrateBar');
+    if (barEl) {
+        barEl.innerHTML = `
+            <div class="winrate-bar-fill win" style="width: ${winPct}%"></div>
+            <div class="winrate-bar-fill loss" style="width: ${lossPct}%"></div>
+            <div class="winrate-bar-fill even" style="width: ${evenPct}%"></div>
+        `;
+    }
+
+    const profitFactor = Math.abs(losses.reduce((s,t)=>s+t.pnl,0)) > 0 ? (wins.reduce((s,t)=>s+t.pnl,0) / Math.abs(losses.reduce((s,t)=>s+t.pnl,0))).toFixed(2) : '-';
+
+    const kpisEl = document.getElementById('winrateKpis');
+    if (kpisEl) {
+        kpisEl.innerHTML = [
+            ['إجمالي الصفقات 📑', closed.length, ''],
+            ['رابحة 🟢', winsCount, 'pnl-pos'],
+            ['خاسرة 🔴', lossesCount, 'pnl-neg'],
+            ['صافي P&L 💰', fmtMoney(netTotal), pnlClass(netTotal)],
+            ['عامل الربح ⚖️', profitFactor, ''],
+            ['متوسط صفقة 📊', fmtMoney(closed.length ? netTotal/closed.length : 0), pnlClass(netTotal)]
+        ].map(([l, v, cls]) => `
+            <div class="wkpi-item">
+                <span class="wkpi-label">${l}</span>
+                <span class="wkpi-val ${cls}">${v}</span>
+            </div>
+        `).join('');
+    }
+
+    // === Best Worst Trade ===
+    const bWCard = document.getElementById('bestWorstCard');
+    const bWCont = document.getElementById('bestWorstContainer');
+    if (bWCard && bWCont) {
+        if (closed.length > 0) {
+            bWCard.style.display = 'block';
+            let bestT = closed[0];
+            let worstT = closed[0];
+            closed.forEach(t => {
+                if(t.pnl > bestT.pnl) bestT = t;
+                if(t.pnl < worstT.pnl) worstT = t;
+            });
+            bWCont.innerHTML = `
+                <div class="bw-card best">
+                    <div class="bw-card-header"><span>🏆 أفضل صفقة</span> <span>${bestT.title || 'بدون عنوان'}</span></div>
+                    <div class="bw-pnl" style="color:var(--green)">${fmtMoney(bestT.pnl)}</div>
+                    <div class="bw-date">${formatDate(bestT.date)}</div>
+                </div>
+                <div class="bw-card worst">
+                    <div class="bw-card-header"><span>📉 أسوأ صفقة</span> <span>${worstT.title || 'بدون عنوان'}</span></div>
+                    <div class="bw-pnl" style="color:var(--red)">${fmtMoney(worstT.pnl)}</div>
+                    <div class="bw-date">${formatDate(worstT.date)}</div>
+                </div>
+            `;
+        } else {
+            bWCard.style.display = 'none';
+        }
+    }
+
+    // === Comprehensive Grid ===
+    const compGrid = document.getElementById('comprehensiveGrid');
+    if (compGrid) {
+        if (closed.length > 0) compGrid.style.display = 'grid';
+        else compGrid.style.display = 'none';
+        
+        const sRow = (l, v, cls = '') => `<div class="stat-row"><span class="stat-row-label">${l}</span><span class="stat-row-val ${cls}">${v}</span></div>`;
+
+        // 1. General
+        document.getElementById('statGeneral').innerHTML = [
+            ['إجمالي الصفقات', state.trades.length],
+            ['صفقات مغلقة', closed.length],
+            ['صفقات مفتوحة', state.trades.length - closed.length],
+            ['صفقات رابحة 🟢', winsCount],
+            ['صفقات خاسرة 🔴', lossesCount],
+            ['صفقات تعادل ⚪', evensCount],
+            ['نسبة الفوز', winPct + '%'],
+            ['نسبة الخسارة', lossPct + '%'],
+            ['عدد الحسابات', state.accounts.length]
+        ].map(([l, v]) => sRow(l, v)).join('');
+
+        // 2. Financial
+        const avgWin = winsCount ? wins.reduce((s,t)=>s+t.pnl,0)/winsCount : 0;
+        const avgLoss = lossesCount ? losses.reduce((s,t)=>s+t.pnl,0)/lossesCount : 0;
+        const totalWinPnl = wins.reduce((s,t)=>s+t.pnl,0);
+        const totalLossPnl = losses.reduce((s,t)=>s+t.pnl,0);
+        const avgLot = closed.length ? (closed.reduce((s,t)=>s+(parseFloat(t.lot)||0),0)/closed.length).toFixed(2) : '-';
+
+        document.getElementById('statFinancial').innerHTML = [
+            ['صافي P/L', fmtMoney(netTotal), pnlClass(netTotal)],
+            ['إجمالي الأرباح', fmtMoney(totalWinPnl), 'pnl-pos'],
+            ['إجمالي الخسائر', fmtMoney(totalLossPnl), 'pnl-neg'],
+            ['متوسط ربح / صفقة', fmtMoney(closed.length ? netTotal/closed.length : 0), pnlClass(netTotal)],
+            ['متوسط الربح', fmtMoney(avgWin), 'pnl-pos'],
+            ['متوسط الخسارة', fmtMoney(avgLoss), 'pnl-neg'],
+            ['عامل الربح (PF)', profitFactor],
+            ['متوسط حجم اللوت', avgLot]
+        ].map(([l, v, c]) => sRow(l, v, c)).join('');
+
+        // 3. Trend Analysis
+        const longs = closed.filter(t => t.direction === 'buy');
+        const shorts = closed.filter(t => t.direction === 'sell');
+        const longWins = longs.filter(t => t.pnl > 0).length;
+        const shortWins = shorts.filter(t => t.pnl > 0).length;
+
+        document.getElementById('statTrend').innerHTML = [
+            ['صفقات شراء (Long)', longs.length],
+            ['صفقات بيع (Short)', shorts.length],
+            ['رابحة شراء', longWins],
+            ['رابحة بيع', shortWins],
+            ['نسبة فوز شراء', longs.length ? Math.round((longWins/longs.length)*100)+'%' : '-'],
+            ['نسبة فوز بيع', shorts.length ? Math.round((shortWins/shorts.length)*100)+'%' : '-'],
+            ['ربح شراء إجمالي', fmtMoney(longs.reduce((s,t)=>s+t.pnl,0)), pnlClass(longs.reduce((s,t)=>s+t.pnl,0))],
+            ['ربح بيع إجمالي', fmtMoney(shorts.reduce((s,t)=>s+t.pnl,0)), pnlClass(shorts.reduce((s,t)=>s+t.pnl,0))]
+        ].map(([l, v, c]) => sRow(l, v, c)).join('');
+
+        // 4. PIP
+        const withTP = closed.filter(t => parseFloat(t.pipTP) > 0);
+        const withSL = closed.filter(t => parseFloat(t.pipSL) > 0);
+        const avgPipTP = withTP.length ? 'pip ' + (withTP.reduce((s,t)=>s+parseFloat(t.pipTP),0)/withTP.length).toFixed(1) : '-';
+        const avgPipSL = withSL.length ? 'pip ' + (withSL.reduce((s,t)=>s+parseFloat(t.pipSL),0)/withSL.length).toFixed(1) : '-';
+        const RRPipTP = withTP.length ? (withTP.reduce((s,t)=>s+parseFloat(t.pipTP),0)/withTP.length) : 0;
+        const RRPipSL = withSL.length ? (withSL.reduce((s,t)=>s+parseFloat(t.pipSL),0)/withSL.length) : 0;
+        
+        document.getElementById('statPip').innerHTML = [
+            ['متوسط PIP الهدف', avgPipTP],
+            ['متوسط PIP الستوب', avgPipSL],
+            ['نسبة R:R المتوسطة', RRPipSL > 0 ? (RRPipTP/RRPipSL).toFixed(2) + ' : 1' : '-'],
+            ['صفقات بهدف محدد', withTP.length],
+            ['صفقات بستوب محدد', withSL.length]
+        ].map(([l, v]) => sRow(l, v)).join('');
+
+        // 5. Advanced
+        let maxW = 0, curW = 0, maxL = 0, curL = 0;
+        const sortedD = [...closed].sort((a,b) => new Date(a.date) - new Date(b.date));
+        sortedD.forEach(t => {
+            if(t.pnl > 0) { curW++; curL=0; maxW=Math.max(maxW, curW); }
+            else if(t.pnl < 0) { curL++; curW=0; maxL=Math.max(maxL, curL); }
+            else { curW=0; curL=0; }
+        });
+
+        document.getElementById('statAdvanced').innerHTML = [
+            ['أطول سلسلة رابحة', maxW + ' صفقات'],
+            ['أطول سلسلة خاسرة', maxL + ' صفقات'],
+            ['نسبة الفوز', winPct+'%'],
+            ['نسبة التعادل', evenPct+'%'],
+            ['أفضل صفقة', sortedD.length ? fmtMoney(Math.max(...sortedD.map(t=>t.pnl))) : '-'],
+            ['أسوأ صفقة', sortedD.length ? fmtMoney(Math.min(...sortedD.map(t=>t.pnl))) : '-']
+        ].map(([l, v]) => sRow(l, v)).join('');
+
+        // 6. Accounts Stats
+        const accMap = {};
+        state.accounts.forEach(a => accMap[a.id] = { name: a.name, trades: 0, wins: 0, pnl: 0 });
+        closed.forEach(t => {
+            if(accMap[t.accountId]) {
+                accMap[t.accountId].trades++;
+                accMap[t.accountId].pnl += t.pnl;
+                if(t.pnl > 0) accMap[t.accountId].wins++;
+            }
+        });
+        
+        document.getElementById('statAccounts').innerHTML = Object.values(accMap).map(a => {
+            const wr = a.trades ? Math.round((a.wins/a.trades)*100) : 0;
+            return `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding:16px 0;">
+                <div style="text-align:right">
+                    <div style="font-size:0.9em; font-weight:600; color:var(--text-secondary); text-align:right">${a.name}</div>
+                    <div style="font-size:0.8em; color:var(--text-muted); margin-top:6px; text-align:right">${a.trades} صفقة | فوز ${wr}%</div>
+                </div>
+                <div style="font-size:1.1em; font-weight:800; color:var(--text-primary)">
+                    <span class="${pnlClass(a.pnl)}">${fmtMoney(a.pnl)}</span>
+                </div>
+            </div>`;
+        }).join('') || '<div style="color:var(--text-muted)">لا يوجد بيانات</div>';
+    }
+
+    renderCharts(closed);
+
+    renderDailyBreakdown(closed);
+    renderMonthlyBreakdown(closed);
+}
+
+// ============================================================
+// CHART RENDERING (Chart.js)
+// ============================================================
+function renderCharts(closedTrades) {
+    const sortedTrades = [...closedTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // 1. Equity Curve Data
+    const equityLabels = [];
+    const equityData = [];
+    let currentEquity = 0;
+    
+    sortedTrades.forEach(t => {
+        currentEquity += t.pnl;
+        equityLabels.push(formatDate(t.date));
+        equityData.push(currentEquity);
     });
-    const maxAbs = Math.max(...Object.values(monthlyMap).map(m => Math.abs(m.net)), 1);
-    const monthDiv = document.getElementById('monthlyBreakdown');
-    if (!Object.keys(monthlyMap).length) {
-        monthDiv.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center">\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u0634\u0647\u0631\u064A\u0629 \u0628\u0639\u062F</div>';
-    } else {
-        const rows = Object.entries(monthlyMap)
-            .sort((a, b) => b[0].localeCompare(a[0]))
-            .map(([month, data]) => {
-                const wr = data.count ? Math.round((data.wins / data.count) * 100) : 0;
-                const bw = Math.round((Math.abs(data.net) / maxAbs) * 100);
-                const bc = data.net >= 0 ? 'var(--green)' : 'var(--red)';
-                let label = month;
-                try { label = new Date(month + '-01').toLocaleDateString('ar-SA', { year: 'numeric', month: 'long' }); } catch (e) { }
-                return `<tr>
-                    <td style="font-weight:700">${label}</td>
-                    <td style="text-align:center">${data.count}</td>
-                    <td style="text-align:center;color:var(--green)">${data.wins}</td>
-                    <td style="text-align:center;color:var(--red)">${data.losses}</td>
-                    <td style="text-align:center">${wr}%</td>
-                    <td class="${pnlClass(data.net)}" style="font-family:var(--font-mono);font-weight:700">${fmtMoney(data.net)}</td>
-                    <td style="min-width:90px"><div class="month-bar-bg"><div class="month-bar-inner" style="width:${bw}%;background:${bc}"></div></div></td>
-                </tr>`;
-            }).join('');
-        monthDiv.innerHTML = `<div class="table-wrap">
-            <table class="monthly-table"><thead><tr>
-                <th>\u0627\u0644\u0634\u0647\u0631</th>
-                <th style="text-align:center">\u0635\u0641\u0642\u0627\u062A</th>
-                <th style="text-align:center">\uD83D\uDFE2 \u0631\u0627\u0628\u062D\u0629</th>
-                <th style="text-align:center">\uD83D\uDD34 \u062E\u0627\u0633\u0631\u0629</th>
-                <th style="text-align:center">\u0646\u0633\u0628\u0629 \u0627\u0644\u0641\u0648\u0632</th>
-                <th>\u0627\u0644\u0631\u0628\u062D / \u0627\u0644\u062E\u0633\u0627\u0631\u0629</th>
-                <th>\u0627\u0644\u0623\u062F\u0627\u0621</th>
-            </tr></thead><tbody>${rows}</tbody></table></div>`;
+
+    // 2. Monthly Bar Chart Data
+    const mthMap = {};
+    sortedTrades.forEach(t => {
+        const d = new Date(t.date);
+        const mName = d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short' });
+        const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!mthMap[sortKey]) mthMap[sortKey] = { label: mName, net: 0 };
+        mthMap[sortKey].net += t.pnl;
+    });
+
+    const mKeys = Object.keys(mthMap).sort();
+    const barLabels = mKeys.map(k => mthMap[k].label);
+    const barData = mKeys.map(k => mthMap[k].net);
+    const barColors = barData.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+
+    Chart.defaults.color = '#5a6080';
+    Chart.defaults.font.family = "'Cairo', sans-serif";
+    
+    const commonOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: 'rgba(22, 25, 35, 0.95)',
+                padding: 12,
+                borderColor: 'rgba(245, 200, 66, 0.3)',
+                borderWidth: 1,
+                callbacks: {
+                    label: (ctx) => ' ' + fmtMoney(ctx.parsed.y)
+                }
+            }
+        },
+        scales: {
+            x: { grid: { display: false } },
+            y: { grid: { color: 'rgba(46, 51, 80, 0.3)', borderDash: [5, 5] }, ticks: { callback: v => '$' + v } }
+        }
+    };
+
+    // Equity (Growth) Chart - Premium Gold Look
+    const ctxEquity = document.getElementById('equityChart');
+    if (ctxEquity) {
+        if (equityChartInstance) equityChartInstance.destroy();
+        const ctx = ctxEquity.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(245, 200, 66, 0.4)');
+        gradient.addColorStop(1, 'rgba(245, 200, 66, 0.05)');
+
+        equityChartInstance = new Chart(ctxEquity, {
+            type: 'line',
+            data: {
+                labels: equityLabels,
+                datasets: [{
+                    label: 'الربح التراكمي',
+                    data: equityData,
+                    borderColor: '#f5c842',
+                    borderWidth: 4,
+                    pointBackgroundColor: '#1a1d28',
+                    pointBorderColor: '#f5c842',
+                    pointBorderWidth: 2,
+                    pointRadius: sortedTrades.length > 30 ? 0 : 5,
+                    pointHoverRadius: 7,
+                    fill: true,
+                    backgroundColor: gradient,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                ...commonOpts,
+                interaction: { intersect: false, mode: 'index' }
+            }
+        });
+    }
+
+    // Monthly Chart
+    const ctxM = document.getElementById('monthlyChart');
+    if (ctxM) {
+        if (monthlyChartInstance) monthlyChartInstance.destroy();
+        monthlyChartInstance = new Chart(ctxM, {
+            type: 'bar',
+            data: {
+                labels: barLabels,
+                datasets: [{ 
+                    data: barData, 
+                    backgroundColor: barColors, 
+                    borderRadius: 6,
+                    barPercentage: 0.6
+                }]
+            },
+            options: commonOpts
+        });
     }
 }
 
+function renderDailyBreakdown(closedTrades) {
+    const dailyMap = {};
+    closedTrades.forEach(t => {
+        const d = t.date;
+        if (!dailyMap[d]) dailyMap[d] = { count: 0, pnl: 0, wins: 0 };
+        dailyMap[d].count++;
+        dailyMap[d].pnl += t.pnl;
+        if (t.pnl > 0) dailyMap[d].wins++;
+    });
+
+    const sortedDates = Object.keys(dailyMap).sort((a,b) => new Date(b) - new Date(a));
+    const maxAbs = Math.max(...Object.values(dailyMap).map(i => Math.abs(i.pnl)), 1);
+    const rows = sortedDates.map(d => {
+        const item = dailyMap[d];
+        const wr = item.count ? Math.round((item.wins / item.count) * 100) : 0;
+        const perfPct = (Math.abs(item.pnl)/maxAbs)*100;
+        const barClass = item.pnl >= 0 ? 'pos' : 'neg';
+        const lossC = item.count - item.wins;
+        return `<tr>
+            <td style="color:var(--text-secondary)">${formatDate(d)}</td>
+            <td style="text-align:center; font-weight:700">${item.count}</td>
+            <td style="text-align:center; font-weight:700" class="pnl-pos">${item.wins}</td>
+            <td style="text-align:center; font-weight:700" class="pnl-neg">${lossC}</td>
+            <td style="text-align:center; font-weight:700" class="${pnlClass(item.pnl)}">${wr}%</td>
+            <td class="${pnlClass(item.pnl)}" style="font-weight:700; text-align:center">${fmtMoney(item.pnl)}</td>
+            <td style="text-align:left">
+                <div class="perf-bar-wrapper">
+                    <div class="perf-bar-fill ${barClass}" style="width: ${Math.max(perfPct, 2)}%"></div>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const container = document.getElementById('dailyBreakdown');
+    if (container) {
+        container.innerHTML = `<div class="table-wrap">
+            <table class="professional-table">
+                <thead>
+                    <tr>
+                        <th style="color:var(--blue); border-top-right-radius: var(--radius-sm);">التاريخ</th>
+                        <th style="color:var(--text-secondary); text-align:center">صفقات</th>
+                        <th style="color:var(--green); text-align:center">🟢 رابحة</th>
+                        <th style="color:var(--red); text-align:center">🔴 خاسرة</th>
+                        <th style="color:var(--gold); text-align:center">🎯 نسبة الفوز</th>
+                        <th style="color:var(--text-primary); text-align:center">الربح/الخسارة</th>
+                        <th style="color:var(--text-primary); text-align:left; border-top-left-radius: var(--radius-sm);">الأداء</th>
+                    </tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="7" style="text-align:center">لا يوجد بيانات</td></tr>'}</tbody>
+            </table>
+        </div>`;
+    }
+}
+
+function renderMonthlyBreakdown(closedTrades) {
+    const mthMap = {};
+    closedTrades.forEach(t => {
+        const d = new Date(t.date);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!mthMap[key]) mthMap[key] = { count: 0, pnl: 0, wins: 0, label: d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long' }) };
+        mthMap[key].count++;
+        mthMap[key].pnl += t.pnl;
+        if (t.pnl > 0) mthMap[key].wins++;
+    });
+
+    const sortedKeys = Object.keys(mthMap).sort((a,b) => b.localeCompare(a));
+    const maxAbs = Math.max(...Object.values(mthMap).map(i => Math.abs(i.pnl)), 1);
+    const rows = sortedKeys.map(k => {
+        const item = mthMap[k];
+        const wr = item.count ? Math.round((item.wins / item.count) * 100) : 0;
+        const perfPct = (Math.abs(item.pnl)/maxAbs)*100;
+        const barClass = item.pnl >= 0 ? 'pos' : 'neg';
+        const lossC = item.count - item.wins;
+        return `<tr>
+            <td style="color:var(--text-secondary)">${item.label}</td>
+            <td style="text-align:center; font-weight:700">${item.count}</td>
+            <td style="text-align:center; font-weight:700" class="pnl-pos">${item.wins}</td>
+            <td style="text-align:center; font-weight:700" class="pnl-neg">${lossC}</td>
+            <td style="text-align:center; font-weight:700" class="${pnlClass(item.pnl)}">${wr}%</td>
+            <td class="${pnlClass(item.pnl)}" style="font-weight:700; text-align:center">${fmtMoney(item.pnl)}</td>
+            <td style="text-align:left">
+                <div class="perf-bar-wrapper">
+                    <div class="perf-bar-fill ${barClass}" style="width: ${Math.max(perfPct, 2)}%"></div>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const container = document.getElementById('monthlyBreakdown');
+    if (container) {
+        container.innerHTML = `<div class="table-wrap">
+            <table class="professional-table">
+                <thead>
+                    <tr>
+                        <th style="color:var(--blue); border-top-right-radius: var(--radius-sm);">الشهر</th>
+                        <th style="color:var(--text-secondary); text-align:center">صفقات</th>
+                        <th style="color:var(--green); text-align:center">🟢 رابحة</th>
+                        <th style="color:var(--red); text-align:center">🔴 خاسرة</th>
+                        <th style="color:var(--gold); text-align:center">🎯 نسبة الفوز</th>
+                        <th style="color:var(--text-primary); text-align:center">الربح/الخسارة</th>
+                        <th style="color:var(--text-primary); text-align:left; border-top-left-radius: var(--radius-sm);">الأداء</th>
+                    </tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="7" style="text-align:center">لا يوجد بيانات</td></tr>'}</tbody>
+            </table>
+        </div>`;
+    }
+}
 
 // ============================================================
 // MODAL OVERLAY CLICK CLOSE
@@ -1347,6 +1607,7 @@ function closeModalOnOverlay(e, overlayId) {
 let toastTimer;
 function showToast(msg) {
     const t = document.getElementById('toast');
+    if (!t) return;
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toastTimer);
@@ -1359,156 +1620,10 @@ function showToast(msg) {
 function updateDate() {
     const d = new Date();
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    document.getElementById('currentDate').textContent = d.toLocaleDateString('ar-SA', options);
+    const el = document.getElementById('currentDate');
+    if (el) el.textContent = d.toLocaleDateString('ar-SA', options);
 }
 
-// ============================================================
-// CHART RENDERING (Chart.js)
-// ============================================================
-function renderCharts(closedTrades) {
-    const sortedTrades = [...closedTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    // 1. Equity Curve Data
-    const equityLabels = [];
-    const equityData = [];
-    let currentEquity = 0;
-    
-    // If we have an account filter, we can start the equity curve at the account balance
-    // For now, let's just do cumulative PnL
-    
-    sortedTrades.forEach(t => {
-        currentEquity += t.pnl;
-        equityLabels.push(formatDate(t.date));
-        equityData.push(currentEquity);
-    });
-
-    // 2. Monthly Bar Chart Data
-    const mthMap = {};
-    sortedTrades.forEach(t => {
-        const d = new Date(t.date);
-        // Format: Jan 2025
-        const mName = d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short' });
-        // Use a sortable key format: YYYY-MM
-        const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        
-        if (!mthMap[sortKey]) mthMap[sortKey] = { label: mName, net: 0 };
-        mthMap[sortKey].net += t.pnl;
-    });
-
-    const mKeys = Object.keys(mthMap).sort(); // Sort chronologically
-    const barLabels = mKeys.map(k => mthMap[k].label);
-    const barData = mKeys.map(k => mthMap[k].net);
-    const barColors = barData.map(v => v >= 0 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)');
-
-    // Common Chart Options
-    Chart.defaults.color = '#5a6080'; // text-muted
-    Chart.defaults.font.family = "'Cairo', sans-serif";
-    Chart.defaults.font.size = 13;
-    
-    const commonOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-            padding: { top: 20, right: 20, bottom: 10, left: 10 }
-        },
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: 'rgba(22, 25, 35, 0.9)',
-                titleFont: { size: 14, family: "'Cairo', sans-serif" },
-                bodyFont: { size: 14, family: "'IBM Plex Mono', monospace" },
-                padding: 12,
-                borderColor: 'rgba(37, 41, 64, 1)',
-                borderWidth: 1,
-                displayColors: false,
-                callbacks: {
-                    label: function(context) {
-                        let label = context.dataset.label || '';
-                        if (label) { label += ': '; }
-                        if (context.parsed.y !== null) {
-                            label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
-                        }
-                        return label;
-                    }
-                }
-            }
-        },
-        scales: {
-            x: { 
-                grid: { display: false, drawBorder: false },
-                ticks: { padding: 10 }
-            },
-            y: { 
-                grid: { color: 'rgba(46, 51, 80, 0.4)', drawBorder: false, borderDash: [5, 5] },
-                border: { display: false },
-                ticks: {
-                    padding: 15,
-                    callback: function(value) { return '$' + value; },
-                    maxTicksLimit: 6
-                }
-            }
-        },
-        interaction: {
-            mode: 'index',
-            intersect: false,
-        },
-    };
-
-    // Render Equity Line Chart
-    const ctxEquity = document.getElementById('equityChart');
-    if (ctxEquity) {
-        if (equityChartInstance) equityChartInstance.destroy();
-        
-        // Create Gradient
-        const gradient = ctxEquity.getContext('2d').createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(245, 200, 66, 0.4)'); // Gold
-        gradient.addColorStop(1, 'rgba(245, 200, 66, 0.0)');
-
-        equityChartInstance = new Chart(ctxEquity, {
-            type: 'line',
-            data: {
-                labels: equityLabels,
-                datasets: [{
-                    label: 'الربح التراكمي',
-                    data: equityData,
-                    borderColor: '#f5c842',
-                    backgroundColor: gradient,
-                    borderWidth: 3,
-                    pointBackgroundColor: '#1a1d28',
-                    pointBorderColor: '#f5c842',
-                    pointBorderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    fill: true,
-                    tension: 0.4 // Smoother curve
-                }]
-            },
-            options: commonOptions
-        });
-    }
-
-    // Render Monthly Bar Chart
-    const ctxMonthly = document.getElementById('monthlyChart');
-    if (ctxMonthly) {
-        if (monthlyChartInstance) monthlyChartInstance.destroy();
-        monthlyChartInstance = new Chart(ctxMonthly, {
-            type: 'bar',
-            data: {
-                labels: barLabels,
-                datasets: [{
-                    label: 'صافي الربح',
-                    data: barData,
-                    backgroundColor: barColors,
-                    borderRadius: 6,
-                    borderSkipped: false,
-                    barPercentage: 0.6,
-                    categoryPercentage: 0.8
-                }]
-            },
-            options: commonOptions
-        });
-    }
-}
 
 // ============================================================
 // XAU/USD SIMULATED TICKER

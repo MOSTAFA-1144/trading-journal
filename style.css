@@ -432,6 +432,57 @@ body {
   color: var(--text-primary);
 }
 
+/* ================================================================
+   PROFESSIONAL TABLES (Daily/Monthly Breakdown)
+   ================================================================ */
+.professional-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: right;
+  font-size: 0.95rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.professional-table thead th {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 16px;
+  border-bottom: 2px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.85rem;
+}
+
+.professional-table tbody td {
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.professional-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.professional-table tbody tr:hover td {
+  background: var(--bg-hover);
+}
+
+/* Fix rounding for the last element in table */
+.professional-table tbody tr:last-child td:first-child {
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.professional-table tbody tr:last-child td:last-child {
+  border-bottom-left-radius: var(--radius-sm);
+}
+
 .filter-row {
   display: flex;
   gap: 10px;
@@ -1788,4 +1839,246 @@ th.sortable.active-sort .sort-icon {
     width: 100%;
     margin-top: 24px;
     padding: 10px 0;
-}
+}
+
+/* ============================================================
+   V3 PROFESSIONAL ANALYTICS ADDITIONS
+   ============================================================ */
+.stats-main-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.stats-top-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+}
+
+.stats-charts-row {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 20px;
+}
+
+.stats-charts-row.single {
+    grid-template-columns: 1fr;
+}
+
+.stats-secondary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.stats-secondary-grid.single {
+    grid-template-columns: 1fr;
+}
+
+.comprehensive-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-accounts-card {
+    grid-column: 1 / -1;
+}
+
+.stat-accounts-card .stat-rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+}
+
+@media (max-width: 1400px) {
+    .comprehensive-stats-grid { grid-template-columns: repeat(3, 1fr); }
+    .stat-accounts-card { grid-column: auto; }
+}
+@media (max-width: 900px) {
+    .comprehensive-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+    .comprehensive-stats-grid { grid-template-columns: 1fr; }
+}
+
+.best-worst-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.bw-card {
+    padding: 20px;
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+}
+
+.bw-card.best {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.bw-card.worst {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.bw-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.bw-card.best .bw-card-header { color: var(--green); }
+.bw-card.worst .bw-card-header { color: var(--red); }
+
+.bw-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.bw-pnl {
+    font-size: 1.6rem;
+    font-weight: 900;
+    font-family: var(--font-mono);
+}
+
+.bw-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Performance Bar for Tables */
+.perf-bar-wrapper {
+    width: 60px;
+    height: 6px;
+    background: var(--bg-surface);
+    border-radius: 4px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.perf-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+}
+.perf-bar-fill.pos { background: var(--green); }
+.perf-bar-fill.neg { background: var(--red); }
+
+.stats-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+}
+
+.stats-tables-row {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.tags-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    padding: 5px 0;
+}
+
+.tag-stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+}
+
+.tag-stat-card:hover {
+    border-color: var(--gold-dark);
+    transform: translateY(-2px);
+    background: var(--bg-hover);
+}
+
+.tag-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.tag-pnl {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.tag-winrate {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.tags-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: var(--bg-base);
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.tag-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-card);
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border-light);
+    cursor: pointer;
+    font-size: 0.8rem;
+    user-select: none;
+    transition: all 0.2s;
+}
+
+.tag-checkbox:hover {
+    border-color: var(--gold);
+    background: var(--gold-glow);
+}
+
+.tag-checkbox input {
+    accent-color: var(--gold);
+}
+
+/* Professional KPI styling */
+.wkpi-item.large {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 1024px) {
+    .stats-charts-row, .stats-secondary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
