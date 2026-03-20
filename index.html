@@ -355,9 +355,12 @@
                 <div class="page-header-bar">
                     <h1 class="page-title">📉 الإحصائيات التفصيلية</h1>
                     <div class="filter-row">
-                        <select class="filter-select" id="statsFilterAccount" onchange="renderStats()">
-                            <option value="">كل الحسابات</option>
-                        </select>
+                        <div class="multi-select-container" id="statsAccountMultiSelect">
+                            <div class="multi-select-trigger" onclick="toggleMultiSelect(event)">كل الحسابات</div>
+                            <div class="multi-select-dropdown" id="statsAccountDropdown">
+                                <!-- Options injected by JS -->
+                            </div>
+                        </div>
                         <select class="filter-select" id="statsFilterPeriod" onchange="renderStats()">
                             <option value="">كل الفترات</option>
                             <option value="7">آخر 7 أيام</option>

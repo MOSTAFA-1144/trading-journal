@@ -721,7 +721,105 @@ function populateAccountFilters() {
         });
         el.value = currentVal;
     });
+
+    // Populate Statistics Multi-Select
+    populateStatsMultiSelect();
 }
+
+function populateStatsMultiSelect() {
+    const dropdown = document.getElementById('statsAccountDropdown');
+    if (!dropdown) return;
+    
+    // Save current selection if possible
+    const checkedIds = Array.from(dropdown.querySelectorAll('input:checked:not([value="all"])')).map(i => i.value);
+    const allChecked = dropdown.querySelector('input[value="all"]')?.checked;
+
+    dropdown.innerHTML = `
+        <label class="multi-select-option ${allChecked || (!checkedIds.length && !dropdown.innerHTML) ? 'selected' : ''}">
+            <input type="checkbox" value="all" ${allChecked || (!checkedIds.length && !dropdown.innerHTML) ? 'checked' : ''} onchange="handleAccountSelection(event)"> الكل
+        </label>
+    ` + state.accounts.map(acc => `
+        <label class="multi-select-option ${checkedIds.includes(acc.id) ? 'selected' : ''}">
+            <input type="checkbox" value="${acc.id}" ${checkedIds.includes(acc.id) ? 'checked' : ''} onchange="handleAccountSelection(event)"> ${acc.name}
+        </label>
+    `).join('');
+
+    updateMultiSelectTrigger();
+}
+
+function toggleMultiSelect(e) {
+    e.stopPropagation();
+    const container = document.getElementById('statsAccountMultiSelect');
+    if (container) container.classList.toggle('open');
+}
+
+function updateMultiSelectTrigger() {
+    const dropdown = document.getElementById('statsAccountDropdown');
+    const trigger = document.querySelector('#statsAccountMultiSelect .multi-select-trigger');
+    if (!dropdown || !trigger) return;
+
+    const allChecked = dropdown.querySelector('input[value="all"]').checked;
+    const checkedBoxes = Array.from(dropdown.querySelectorAll('input:checked:not([value="all"])'));
+    
+    if (allChecked || checkedBoxes.length === 0) {
+        trigger.textContent = 'كل الحسابات';
+    } else if (checkedBoxes.length === 1) {
+        trigger.textContent = checkedBoxes[0].parentElement.textContent.trim();
+    } else if (checkedBoxes.length === state.accounts.length) {
+        trigger.textContent = 'كل الحسابات';
+        // Auto-check "All" if all individual ones are checked
+        dropdown.querySelector('input[value="all"]').checked = true;
+        dropdown.querySelectorAll('input:not([value="all"])').forEach(i => i.checked = false);
+        dropdown.querySelectorAll('.multi-select-option').forEach(el => el.classList.remove('selected'));
+        dropdown.querySelector('.multi-select-option:first-child').classList.add('selected');
+    } else {
+        trigger.textContent = `محدد (${checkedBoxes.length}) حسابات`;
+    }
+}
+
+function handleAccountSelection(e) {
+    const val = e.target.value;
+    const isChecked = e.target.checked;
+    const dropdown = document.getElementById('statsAccountDropdown');
+    
+    if (val === 'all') {
+        if (isChecked) {
+            // Uncheck others if "All" is selected
+            dropdown.querySelectorAll('input:not([value="all"])').forEach(i => i.checked = false);
+        } else {
+            // Don't allow unchecking "All" if nothing else is checked
+            const othersChecked = dropdown.querySelector('input:checked:not([value="all"])');
+            if (!othersChecked) e.target.checked = true;
+        }
+    } else {
+        if (isChecked) {
+            // Uncheck "All" if an individual account is selected
+            dropdown.querySelector('input[value="all"]').checked = false;
+        } else {
+            // If all individual ones unchecked, check "All"
+            const othersChecked = dropdown.querySelector('input:checked:not([value="all"])');
+            if (!othersChecked) dropdown.querySelector('input[value="all"]').checked = true;
+        }
+    }
+
+    // Update UI classes
+    dropdown.querySelectorAll('.multi-select-option').forEach(opt => {
+        const input = opt.querySelector('input');
+        if (input.checked) opt.classList.add('selected');
+        else opt.classList.remove('selected');
+    });
+
+    updateMultiSelectTrigger();
+    renderStats();
+}
+
+// Close multi-select on click outside
+document.addEventListener('click', (e) => {
+    const container = document.getElementById('statsAccountMultiSelect');
+    if (container && !container.contains(e.target)) {
+        container.classList.remove('open');
+    }
+});
 
 function populateGalleryFilters() {
     populateAccountFilters();
@@ -1112,7 +1210,10 @@ let equityChartInstance = null;
 let monthlyChartInstance = null;
 
 function renderStats() {
-    const accFilter = document.getElementById('statsFilterAccount')?.value || '';
+    const dropdown = document.getElementById('statsAccountDropdown');
+    const allChecked = dropdown?.querySelector('input[value="all"]')?.checked;
+    const selectedAccountIds = allChecked ? [] : Array.from(dropdown?.querySelectorAll('input:checked') || []).map(i => i.value);
+    
     const periodFilter = document.getElementById('statsFilterPeriod')?.value || '0';
 
     const customDateContainer = document.getElementById('customDateRange');
@@ -1124,16 +1225,10 @@ function renderStats() {
         document.getElementById('statsEndDate').value = '';
     }
 
-    const statsAccSel = document.getElementById('statsFilterAccount');
-    if (statsAccSel) {
-        const cur = statsAccSel.value;
-        while (statsAccSel.options.length > 1) statsAccSel.remove(1);
-        state.accounts.forEach(acc => statsAccSel.add(new Option(acc.name, acc.id)));
-        statsAccSel.value = cur;
-    }
-
     let trades = [...state.trades];
-    if (accFilter) trades = trades.filter(t => t.accountId === accFilter);
+    if (selectedAccountIds.length > 0) {
+        trades = trades.filter(t => selectedAccountIds.includes(t.accountId));
+    }
     
     if (periodFilter === 'custom') {
         const startStr = document.getElementById('statsStartDate').value;
@@ -1258,15 +1353,15 @@ function renderStats() {
 
         // 1. General
         document.getElementById('statGeneral').innerHTML = [
-            ['إجمالي الصفقات', state.trades.length],
+            ['إجمالي الصفقات', trades.length],
             ['صفقات مغلقة', closed.length],
-            ['صفقات مفتوحة', state.trades.length - closed.length],
+            ['صفقات مفتوحة', trades.length - closed.length],
             ['صفقات رابحة 🟢', winsCount],
             ['صفقات خاسرة 🔴', lossesCount],
             ['صفقات تعادل ⚪', evensCount],
             ['نسبة الفوز', winPct + '%'],
             ['نسبة الخسارة', lossPct + '%'],
-            ['عدد الحسابات', state.accounts.length]
+            ['عدد الحسابات', selectedAccountIds.length > 0 ? selectedAccountIds.length : state.accounts.length]
         ].map(([l, v]) => sRow(l, v)).join('');
 
         // 2. Financial
