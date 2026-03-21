@@ -1830,6 +1830,11 @@ function changeWeek(delta) {
     renderStats();
 }
 
+function goToCurrentWeek() {
+    weekOffset = 0;
+    renderStats();
+}
+
 function changeMonth(delta) {
     calendarDate.setMonth(calendarDate.getMonth() + delta);
     renderStats(); // This will call renderCalendar
