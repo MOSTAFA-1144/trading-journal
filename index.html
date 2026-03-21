@@ -463,10 +463,49 @@
                         </div>
                     </div>
 
+                    <!-- Trading Calendar Section -->
+                    <div class="section-card calendar-card full-width">
+                        <div class="section-header">
+                            <h2 class="section-title">📅 تقويم التداولات</h2>
+                            <div class="calendar-nav">
+                                <button class="btn-ghost btn-icon" id="prevMonth" onclick="changeMonth(-1)">❮</button>
+                                <h3 id="calendarMonthYear" class="calendar-current-month">03 / 2025</h3>
+                                <button class="btn-ghost btn-icon" id="nextMonth" onclick="changeMonth(1)">❯</button>
+                                <button class="btn-ghost" style="margin-right: 15px; font-size: 0.8rem; padding: 4px 10px;" onclick="goToCurrentMonth()">📅 الشهر الحالي</button>
+                            </div>
+                        </div>
+                        <div class="calendar-wrapper">
+                            <div class="calendar-grid-header">
+                                <div>الأحد</div>
+                                <div>الأثنين</div>
+                                <div>الثلاثاء</div>
+                                <div>الأربعاء</div>
+                                <div>الخميس</div>
+                                <div>الجمعة</div>
+                                <div>السبت</div>
+                            </div>
+                            <div class="calendar-body-layout">
+                                <div id="statsCalendar" class="calendar-grid">
+                                    <!-- Days injected by JS -->
+                                </div>
+                                <div id="calendarWeeklySummary" class="calendar-weekly-summary">
+                                    <!-- Weekly stats injected by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Daily/Monthly tables -->
                     <div class="stats-tables-row">
                         <div class="section-card">
-                            <div class="section-header"><h2 class="section-title">📆 إحصاء يومي</h2></div>
+                            <div class="section-header">
+                                <h2 class="section-title">📆 إحصاء يومي</h2>
+                                <div class="calendar-nav" style="margin-right: auto; margin-left: 0;">
+                                    <button class="btn-ghost btn-icon" onclick="changeWeek(-1)">❮</button>
+                                    <span id="weekRangeDisplay" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); min-width: 180px; text-align: center;">جاري التحميل...</span>
+                                    <button class="btn-ghost btn-icon" onclick="changeWeek(1)">❯</button>
+                                </div>
+                            </div>
                             <div id="dailyBreakdown"></div>
                         </div>
                         <div class="section-card">

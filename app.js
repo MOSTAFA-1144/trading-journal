@@ -1460,9 +1460,11 @@ function renderStats() {
     }
 
     renderCharts(closed);
-
+    
+    // Pass closed trades to daily breakdown
     renderDailyBreakdown(closed);
     renderMonthlyBreakdown(closed);
+    renderCalendar(trades);
 }
 
 // ============================================================
@@ -1586,9 +1588,34 @@ function renderDailyBreakdown(closedTrades) {
         if (t.pnl > 0) dailyMap[d].wins++;
     });
 
-    const sortedDates = Object.keys(dailyMap).sort((a,b) => new Date(b) - new Date(a));
+    // Get current week range based on weekOffset
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 is Sunday
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - dayOfWeek + (weekOffset * 7));
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    // Filter dates in this week
+    const filteredDates = Object.keys(dailyMap)
+        .filter(d => {
+            const date = new Date(d);
+            return date >= startOfWeek && date <= endOfWeek;
+        })
+        .sort((a,b) => new Date(b) - new Date(a));
+
+    // Update range display
+    const rangeDisplay = document.getElementById('weekRangeDisplay');
+    if (rangeDisplay) {
+        const fmtDate = (d) => d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' });
+        rangeDisplay.textContent = `${fmtDate(startOfWeek)} - ${fmtDate(endOfWeek)}`;
+    }
+
     const maxAbs = Math.max(...Object.values(dailyMap).map(i => Math.abs(i.pnl)), 1);
-    const rows = sortedDates.map(d => {
+    const rows = filteredDates.map(d => {
         const item = dailyMap[d];
         const wr = item.count ? Math.round((item.wins / item.count) * 100) : 0;
         const perfPct = (Math.abs(item.pnl)/maxAbs)*100;
@@ -1624,7 +1651,7 @@ function renderDailyBreakdown(closedTrades) {
                         <th style="color:var(--text-primary); text-align:left; border-top-left-radius: var(--radius-sm);">الأداء</th>
                     </tr>
                 </thead>
-                <tbody>${rows || '<tr><td colspan="7" style="text-align:center">لا يوجد بيانات</td></tr>'}</tbody>
+                <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding: 20px;">لا توجد تداولات في هذا الأسبوع</td></tr>'}</tbody>
             </table>
         </div>`;
     }
@@ -1790,6 +1817,127 @@ async function initApp() {
     const today = new Date().toISOString().slice(0, 10);
     const dateEl = document.getElementById('t_date');
     if (dateEl) dateEl.value = today;
+}
+
+// ============================================================
+// TRADING CALENDAR LOGIC
+// ============================================================
+let calendarDate = new Date();
+let weekOffset = 0; // 0 is current week, -1 last week, etc.
+
+function changeWeek(delta) {
+    weekOffset += delta;
+    renderStats();
+}
+
+function changeMonth(delta) {
+    calendarDate.setMonth(calendarDate.getMonth() + delta);
+    renderStats(); // This will call renderCalendar
+}
+
+function goToCurrentMonth() {
+    calendarDate = new Date();
+    renderStats();
+}
+
+function renderCalendar(trades) {
+    const calendarMonthYear = document.getElementById('calendarMonthYear');
+    const statsCalendar = document.getElementById('statsCalendar');
+    const weeklySummary = document.getElementById('calendarWeeklySummary');
+    
+    if (!calendarMonthYear || !statsCalendar) return;
+
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+
+    // Show month number / year as requested
+    calendarMonthYear.textContent = `${String(month + 1).padStart(2, '0')} / ${year}`;
+
+    // Group trades by date for this month
+    const dailyData = {};
+    trades.forEach(t => {
+        const d = new Date(t.date);
+        if (d.getFullYear() === year && d.getMonth() === month) {
+            const dateStr = t.date; // Use original date string YYYY-MM-DD
+            if (!dailyData[dateStr]) dailyData[dateStr] = { pnl: 0, count: 0, wins: 0, losses: 0, lot: 0, trades: [] };
+            dailyData[dateStr].pnl += (t.pnl || 0);
+            dailyData[dateStr].count++;
+            if (t.pnl > 0) dailyData[dateStr].wins++;
+            else if (t.pnl < 0) dailyData[dateStr].losses++;
+            dailyData[dateStr].lot += (t.lot || 0);
+            dailyData[dateStr].trades.push(t);
+        }
+    });
+
+    // Calendar Grid Logic
+    statsCalendar.innerHTML = '';
+    const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Empty cells for previous month
+    for (let i = 0; i < firstDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'calendar-day empty';
+        statsCalendar.appendChild(emptyCell);
+    }
+
+    let weeklyPnL = [0, 0, 0, 0, 0, 0];
+    let weeklyTrades = [0, 0, 0, 0, 0, 0];
+
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const data = dailyData[dateStr];
+        const dayCell = document.createElement('div');
+        dayCell.className = 'calendar-day';
+        
+        let html = `<span class="day-num">${day}</span>`;
+        
+        if (data) {
+            const pnlClassStr = data.pnl > 0 ? 'pos' : data.pnl < 0 ? 'neg' : '';
+            const statusClass = data.pnl > 0 ? 'profit' : data.pnl < 0 ? 'loss' : '';
+            dayCell.classList.add('has-trades', statusClass);
+            
+            html += `
+                <div class="day-content">
+                    <span class="day-pnl ${pnlClassStr}">${fmtMoney(data.pnl)}</span>
+                    <span class="day-trades">${data.count} صفقات</span>
+                </div>
+                <div class="day-popover">
+                    <div class="popover-header">${formatDate(dateStr)}</div>
+                    <div class="popover-row"><span>إجمالي الربح/الخسارة:</span><span class="${pnlClassStr}">${fmtMoney(data.pnl)}</span></div>
+                    <div class="popover-row"><span>عدد الصفقات:</span><span>${data.count}</span></div>
+                    <div class="popover-row"><span>رابحة:</span><span class="pnl-pos">${data.wins}</span></div>
+                    <div class="popover-row"><span>خاسرة:</span><span class="pnl-neg">${data.losses}</span></div>
+                    <div class="popover-row"><span>حجم اللوت:</span><span>${data.lot.toFixed(2)}</span></div>
+                </div>
+            `;
+
+            // Track weekly summary
+            const weekIdx = Math.floor((day + firstDay - 1) / 7);
+            if (weekIdx < 6) {
+                weeklyPnL[weekIdx] += data.pnl;
+                weeklyTrades[weekIdx] += data.count;
+            }
+        }
+        
+        dayCell.innerHTML = html;
+        statsCalendar.appendChild(dayCell);
+    }
+
+    // Weekly Summary Sidebar
+    if (weeklySummary) {
+        weeklySummary.innerHTML = weeklyPnL.map((pnl, i) => {
+            if (i > Math.floor((daysInMonth + firstDay - 1) / 7)) return '';
+            return `
+                <div class="week-stat">
+                    <span class="week-label">الأسبوع ${i + 1}</span>
+                    <span class="week-pnl ${pnlClass(pnl)}">${fmtMoney(pnl)}</span>
+                    <span class="week-trades">${weeklyTrades[i]} صفقات</span>
+                </div>
+            `;
+        }).join('');
+    }
 }
 
 // ============================================================
