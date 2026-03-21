@@ -2119,6 +2119,29 @@ th.sortable.active-sort .sort-icon {
   align-items: center;
   gap: 4px;
   transition: var(--transition);
+  position: relative;
+}
+
+.tag-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1d28;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 1000;
+  width: 200px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  display: none;
+  pointer-events: none;
+  text-align: right;
+  margin-bottom: 8px;
+}
+
+.tag-stat-card:hover .tag-popover {
+  display: block;
 }
 
 .tag-stat-card:hover {

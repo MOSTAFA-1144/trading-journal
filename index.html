@@ -285,6 +285,19 @@
                             <option value="خسارة">خاسرة</option>
                             <option value="تعادل">تعادل</option>
                         </select>
+                        <select class="filter-select" id="tradesFilterPeriod" onchange="renderTradesTable()">
+                            <option value="">كل الفترات</option>
+                            <option value="7">آخر 7 أيام</option>
+                            <option value="30">آخر 30 يوم</option>
+                            <option value="90">آخر 3 أشهر</option>
+                            <option value="365">آخر سنة</option>
+                            <option value="custom">تحديد فترة مخصصة...</option>
+                        </select>
+                        <div id="tradesCustomDateRange" style="display: none; align-items: center; gap: 8px;">
+                            <input type="date" id="tradesStartDate" class="filter-select" onchange="renderTradesTable()" title="من تاريخ">
+                            <span style="color: var(--text-secondary); font-size: 0.9rem;">إلى</span>
+                            <input type="date" id="tradesEndDate" class="filter-select" onchange="renderTradesTable()" title="إلى تاريخ">
+                        </div>
                         <button class="btn-primary" onclick="openTradeModal()">＋ صفقة جديدة</button>
                     </div>
                 </div>
@@ -340,6 +353,19 @@
                             <option value="خسارة">خاسرة</option>
                             <option value="تعادل">تعادل</option>
                         </select>
+                        <select class="filter-select" id="galleryFilterPeriod" onchange="renderGallery()">
+                            <option value="">كل الفترات</option>
+                            <option value="7">آخر 7 أيام</option>
+                            <option value="30">آخر 30 يوم</option>
+                            <option value="90">آخر 3 أشهر</option>
+                            <option value="365">آخر سنة</option>
+                            <option value="custom">تحديد فترة مخصصة...</option>
+                        </select>
+                        <div id="galleryCustomDateRange" style="display: none; align-items: center; gap: 8px;">
+                            <input type="date" id="galleryStartDate" class="filter-select" onchange="renderGallery()" title="من تاريخ">
+                            <span style="color: var(--text-secondary); font-size: 0.9rem;">إلى</span>
+                            <input type="date" id="galleryEndDate" class="filter-select" onchange="renderGallery()" title="إلى تاريخ">
+                        </div>
                     </div>
                 </div>
                 <div class="gallery-grid" id="galleryGrid">

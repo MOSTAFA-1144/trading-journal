@@ -1045,12 +1045,34 @@ function renderTradesTable() {
     const accFilter = document.getElementById('filterAccount')?.value || '';
     const dirFilter = document.getElementById('filterDirection')?.value || '';
     const resFilter = document.getElementById('filterResult')?.value || '';
+    const periodFilter = document.getElementById('tradesFilterPeriod')?.value || '';
+
+    const customDateContainer = document.getElementById('tradesCustomDateRange');
+    if (periodFilter === 'custom') {
+        if (customDateContainer) customDateContainer.style.display = 'flex';
+    } else {
+        if (customDateContainer) customDateContainer.style.display = 'none';
+        const startEl = document.getElementById('tradesStartDate');
+        const endEl = document.getElementById('tradesEndDate');
+        if (startEl) startEl.value = '';
+        if (endEl) endEl.value = '';
+    }
 
     let trades = [...state.trades];
 
     if (accFilter) trades = trades.filter(t => t.accountId === accFilter);
     if (dirFilter) trades = trades.filter(t => t.direction === dirFilter);
     if (resFilter) trades = trades.filter(t => t.result === resFilter);
+
+    if (periodFilter === 'custom') {
+        const startStr = document.getElementById('tradesStartDate')?.value;
+        const endStr = document.getElementById('tradesEndDate')?.value;
+        if (startStr) trades = trades.filter(t => new Date(t.date).getTime() >= new Date(startStr + "T00:00:00").getTime());
+        if (endStr) trades = trades.filter(t => new Date(t.date).getTime() <= new Date(endStr + "T23:59:59").getTime());
+    } else if (parseInt(periodFilter) > 0) {
+        const cutoff = new Date(Date.now() - parseInt(periodFilter) * 86400000);
+        trades = trades.filter(t => new Date(t.date) >= cutoff);
+    }
 
     // Apply Sorting
     trades.sort((a, b) => {
@@ -1164,10 +1186,33 @@ function renderAccountsPage() {
 function renderGallery() {
     const accFilter = document.getElementById('galleryFilterAccount')?.value || '';
     const resFilter = document.getElementById('galleryFilterResult')?.value || '';
+    const periodFilter = document.getElementById('galleryFilterPeriod')?.value || '';
+
+    const customDateContainer = document.getElementById('galleryCustomDateRange');
+    if (periodFilter === 'custom') {
+        if (customDateContainer) customDateContainer.style.display = 'flex';
+    } else {
+        if (customDateContainer) customDateContainer.style.display = 'none';
+        const startEl = document.getElementById('galleryStartDate');
+        const endEl = document.getElementById('galleryEndDate');
+        if (startEl) startEl.value = '';
+        if (endEl) endEl.value = '';
+    }
 
     let trades = [...state.trades].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
     if (accFilter) trades = trades.filter(t => t.accountId === accFilter);
     if (resFilter) trades = trades.filter(t => t.result === resFilter);
+    
+    if (periodFilter === 'custom') {
+        const startStr = document.getElementById('galleryStartDate')?.value;
+        const endStr = document.getElementById('galleryEndDate')?.value;
+        if (startStr) trades = trades.filter(t => new Date(t.date).getTime() >= new Date(startStr + "T00:00:00").getTime());
+        if (endStr) trades = trades.filter(t => new Date(t.date).getTime() <= new Date(endStr + "T23:59:59").getTime());
+    } else if (parseInt(periodFilter) > 0) {
+        const cutoff = new Date(Date.now() - parseInt(periodFilter) * 86400000);
+        trades = trades.filter(t => new Date(t.date) >= cutoff);
+    }
 
     const grid = document.getElementById('galleryGrid');
     if (!trades.length) {
@@ -1249,10 +1294,12 @@ function renderStats() {
         const ts = (t.tags || 'غير محدد').split(',');
         ts.forEach(tag => {
             if (!tag.trim()) return;
-            if (!tagsMap[tag]) tagsMap[tag] = { pnl: 0, wins: 0, count: 0 };
+            if (!tagsMap[tag]) tagsMap[tag] = { pnl: 0, wins: 0, losses: 0, evens: 0, count: 0 };
             tagsMap[tag].count++;
             tagsMap[tag].pnl += t.pnl;
             if (t.pnl > 0) tagsMap[tag].wins++;
+            else if (t.pnl < 0) tagsMap[tag].losses++;
+            else tagsMap[tag].evens++;
         });
     });
 
@@ -1263,6 +1310,14 @@ function renderStats() {
             <span class="tag-name">${name}</span>
             <span class="tag-pnl ${pnlClass(d.pnl)}">${fmtMoney(d.pnl)}</span>
             <span class="tag-winrate">فوز: ${Math.round((d.wins/d.count)*100)}% (${d.count})</span>
+            <div class="tag-popover">
+                <div class="popover-header">${name}</div>
+                <div class="popover-row"><span>الربح/الخسارة:</span><span class="${pnlClass(d.pnl)}">${fmtMoney(d.pnl)}</span></div>
+                <div class="popover-row"><span>إجمالي الصفقات:</span><span>${d.count}</span></div>
+                <div class="popover-row"><span>رابحة:</span><span class="pnl-pos">${d.wins}</span></div>
+                <div class="popover-row"><span>خاسرة:</span><span class="pnl-neg">${d.losses}</span></div>
+                <div class="popover-row"><span>متعادلة:</span><span class="pnl-zero">${d.evens}</span></div>
+            </div>
         </div>
     `).join('') || '<div style="color:var(--text-muted);padding:20px">لا يوجد بيانات للوسوم بعد</div>';
 
@@ -1383,8 +1438,8 @@ function renderStats() {
         ].map(([l, v, c]) => sRow(l, v, c)).join('');
 
         // 3. Trend Analysis
-        const longs = closed.filter(t => t.direction === 'buy');
-        const shorts = closed.filter(t => t.direction === 'sell');
+        const longs = closed.filter(t => t.direction === 'شراء');
+        const shorts = closed.filter(t => t.direction === 'بيع');
         const longWins = longs.filter(t => t.pnl > 0).length;
         const shortWins = shorts.filter(t => t.pnl > 0).length;
 
