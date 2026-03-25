@@ -345,15 +345,32 @@ async function saveAccount(e) {
             const { error } = await db.from('accounts').update(dbPayload).eq('id', accountId);
             if (error) throw error;
             showToast('✅ تم تحديث الحساب بنجاح');
+            
+            const existing = state.accounts.find(a => a.id === accountId);
+            if (existing) {
+                existing.name = dbPayload.name;
+                existing.type = dbPayload.type;
+                existing.initialBalance = Number(dbPayload.initial_balance);
+                existing.notes = dbPayload.notes;
+            }
         } else {
             accountId = uid();
             dbPayload.id = accountId;
             const { error } = await db.from('accounts').insert([dbPayload]);
             if (error) throw error;
             showToast('✅ تم إضافة الحساب بنجاح');
+            
+            state.accounts.push({
+                id: dbPayload.id,
+                name: dbPayload.name,
+                type: dbPayload.type,
+                initialBalance: Number(dbPayload.initial_balance),
+                notes: dbPayload.notes,
+                createdAt: new Date().toISOString()
+            });
         }
 
-        await loadState();
+        // await loadState(); // Removed for performance
         closeAccountModal();
         populateAccountFilters();
         renderDashboard();
@@ -374,7 +391,9 @@ async function deleteAccount(id) {
         const { error } = await db.from('accounts').delete().eq('id', id);
         if (error) throw error;
         
-        await loadState();
+        state.accounts = state.accounts.filter(a => a.id !== id);
+        state.trades = state.trades.filter(t => t.accountId !== id);
+        
         populateAccountFilters();
         renderDashboard();
         renderAccountsPage();
@@ -544,15 +563,58 @@ async function saveTrade(e) {
             const { error } = await db.from('trades').update(dbPayload).eq('id', tradeId);
             if (error) throw error;
             showToast('✅ تم تحديث الصفقة بنجاح');
+
+            const existing = state.trades.find(t => t.id === tradeId);
+            if (existing) {
+                Object.assign(existing, {
+                    accountId: dbPayload.account_id,
+                    title: dbPayload.title,
+                    direction: dbPayload.direction,
+                    date: dbPayload.date,
+                    entry: Number(dbPayload.entry),
+                    exit: dbPayload.exit_price !== null ? Number(dbPayload.exit_price) : null,
+                    target: dbPayload.target !== null ? Number(dbPayload.target) : null,
+                    stop: dbPayload.stop !== null ? Number(dbPayload.stop) : null,
+                    lot: Number(dbPayload.lot),
+                    pnl: dbPayload.pnl !== null ? Number(dbPayload.pnl) : null,
+                    pipTP: dbPayload.pip_tp !== null ? Number(dbPayload.pip_tp) : null,
+                    pipSL: dbPayload.pip_sl !== null ? Number(dbPayload.pip_sl) : null,
+                    result: dbPayload.result,
+                    notes: dbPayload.notes,
+                    tags: dbPayload.tags || ''
+                });
+                if (dbPayload.image) existing.image = dbPayload.image;
+            }
         } else {
             tradeId = uid();
             dbPayload.id = tradeId;
             const { error } = await db.from('trades').insert([dbPayload]);
             if (error) throw error;
             showToast('✅ تم تسجيل الصفقة بنجاح');
+
+            state.trades.push({
+                id: dbPayload.id,
+                accountId: dbPayload.account_id,
+                title: dbPayload.title,
+                direction: dbPayload.direction,
+                date: dbPayload.date,
+                entry: Number(dbPayload.entry),
+                exit: dbPayload.exit_price !== null ? Number(dbPayload.exit_price) : null,
+                target: dbPayload.target !== null ? Number(dbPayload.target) : null,
+                stop: dbPayload.stop !== null ? Number(dbPayload.stop) : null,
+                lot: Number(dbPayload.lot),
+                pnl: dbPayload.pnl !== null ? Number(dbPayload.pnl) : null,
+                pipTP: dbPayload.pip_tp !== null ? Number(dbPayload.pip_tp) : null,
+                pipSL: dbPayload.pip_sl !== null ? Number(dbPayload.pip_sl) : null,
+                result: dbPayload.result,
+                notes: dbPayload.notes,
+                image: dbPayload.image || null,
+                tags: dbPayload.tags || '',
+                createdAt: new Date().toISOString()
+            });
         }
 
-        await loadState();
+        // await loadState(); // Removed for performance
         closeTradeModal();
         renderDashboard();
         renderTradesTable();
@@ -576,7 +638,7 @@ async function deleteTrade(id) {
         const { error } = await db.from('trades').delete().eq('id', id);
         if (error) throw error;
         
-        await loadState();
+        state.trades = state.trades.filter(t => t.id !== id);
         renderDashboard();
         renderTradesTable();
         renderGallery();
