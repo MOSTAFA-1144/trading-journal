@@ -778,6 +778,16 @@ body {
 .table-wrap {
   overflow-x: auto;
   border-radius: var(--radius-sm);
+  position: relative;
+  /* Add scroll indicator shadow */
+  background: linear-gradient(to right, var(--bg-card) 30%, rgba(255,255,255,0)),
+              linear-gradient(to right, rgba(255,255,255,0), var(--bg-card) 70%) 0 100%,
+              radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.2), rgba(0,0,0,0)),
+              radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.2), rgba(0,0,0,0)) 0 100%;
+  background-repeat: no-repeat;
+  background-color: var(--bg-card);
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .data-table {
@@ -1252,6 +1262,7 @@ body {
   width: 100%;
   max-width: 680px;
   max-height: 90vh;
+  margin: 0 auto;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: modalIn 0.25s ease;
@@ -1756,10 +1767,30 @@ body {
 @media (max-width: 768px) {
   .sidebar {
     width: 0;
+    transform: translateX(100%);
   }
 
   .sidebar.mobile-open {
     width: var(--sidebar-w);
+    transform: translateX(0);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Overlay when sidebar is open */
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 90;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .mobile-overlay.active {
+    display: block;
+    opacity: 1;
   }
 
   .main {
@@ -1780,12 +1811,28 @@ body {
     text-align: center;
   }
 
-  .view-trade-grid {
-    grid-template-columns: 1fr;
+  .modal {
+    max-height: 96vh;
+    border-radius: var(--radius);
+    margin: 4px;
   }
 
-  .view-field:nth-child(odd) {
-    border-left: none;
+  .modal-header {
+    padding: 14px 18px;
+  }
+
+  .modal-form {
+    padding: 16px 18px;
+  }
+
+  .view-trade-grid {
+    grid-template-columns: 1fr;
+    padding: 10px 18px;
+  }
+
+  .view-chart-img {
+    margin: 10px 18px;
+    width: calc(100% - 36px);
   }
 
   .topbar {
@@ -1796,10 +1843,6 @@ body {
     padding: 16px;
   }
 
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .winrate-hero {
     flex-direction: column;
     align-items: flex-start;
@@ -1807,6 +1850,68 @@ body {
 
   .wkpi-item {
     min-width: 90px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  @media (max-width: 480px) {
+    .kpi-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Calendar mobile adjustments */
+  .calendar-grid-header {
+    margin-left: 0;
+    font-size: 0.75rem;
+  }
+
+  .calendar-body-layout {
+    flex-direction: column;
+  }
+
+  .calendar-weekly-summary {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    background: rgba(245, 200, 66, 0.05);
+    border-top: 1px solid var(--border);
+  }
+
+  .week-stat {
+    flex: 1;
+    min-width: 100px;
+    min-height: 70px;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    padding: 8px;
+    align-items: center;
+    text-align: center;
+  }
+
+  .calendar-day {
+    min-height: 70px;
+    padding: 4px;
+  }
+
+  .day-num {
+    font-size: 0.7rem;
+  }
+
+  .day-pnl {
+    font-size: 0.85rem;
+  }
+
+  .calendar-nav {
+    gap: 8px;
+  }
+
+  .calendar-current-month {
+    font-size: 1rem;
+    min-width: 100px;
   }
 }
 
@@ -1929,6 +2034,12 @@ th.sortable.active-sort .sort-icon {
   width: 100%;
   margin-top: 24px;
   padding: 10px 0;
+}
+
+@media (max-width: 768px) {
+  .chart-container {
+    height: 280px;
+  }
 }
 
 /* ============================================================

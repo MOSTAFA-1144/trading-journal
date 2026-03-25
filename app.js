@@ -228,6 +228,8 @@ document.querySelectorAll('.nav-item').forEach(btn => {
             sidebar.classList.remove('mobile-open');
             sidebar.classList.add('collapsed');
             document.getElementById('mainContent').classList.remove('sidebar-collapsed');
+            const overlay = document.getElementById('mobileOverlay');
+            if (overlay) overlay.classList.remove('active');
         }
     });
 });
@@ -243,16 +245,22 @@ document.getElementById('menuBtn').addEventListener('click', (e) => {
     e.stopPropagation();
     const sidebar = document.getElementById('sidebar');
     const main = document.getElementById('mainContent');
+    const overlay = document.getElementById('mobileOverlay');
     
     sidebar.classList.toggle('collapsed');
     sidebar.classList.toggle('mobile-open');
     main.classList.toggle('sidebar-collapsed');
+    
+    if (overlay) {
+        overlay.classList.toggle('active');
+    }
 });
 
 // Close sidebar on click outside in mobile
 document.addEventListener('click', (e) => {
     const sidebar = document.getElementById('sidebar');
     const menuBtn = document.getElementById('menuBtn');
+    const overlay = document.getElementById('mobileOverlay');
     
     if (sidebar && sidebar.classList.contains('mobile-open')) {
         // If click is not inside sidebar and not on the menu button
@@ -260,7 +268,20 @@ document.addEventListener('click', (e) => {
             sidebar.classList.remove('mobile-open');
             sidebar.classList.add('collapsed');
             document.getElementById('mainContent').classList.remove('sidebar-collapsed');
+            if (overlay) overlay.classList.remove('active');
         }
+    }
+});
+
+// Also close on overlay click
+document.getElementById('mobileOverlay')?.addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+    if (sidebar && sidebar.classList.contains('mobile-open')) {
+        sidebar.classList.remove('mobile-open');
+        sidebar.classList.add('collapsed');
+        document.getElementById('mainContent').classList.remove('sidebar-collapsed');
+        if (overlay) overlay.classList.remove('active');
     }
 });
 
