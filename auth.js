@@ -244,63 +244,221 @@ async function adminDeleteUser(userId) {
 // ============================================================
 // RENDER ADMIN PAGE
 // ============================================================
+// ============================================================
+// ADMIN DATA AGGREGATION
+// ============================================================
+async function adminGetFullPlatformData() {
+    try {
+        // 1. Fetch all users
+        const { data: users, error: uErr } = await db.from('users').select('*').order('created_at', { ascending: false });
+        if (uErr) throw uErr;
+
+        // 2. Fetch all trades
+        const { data: trades, error: tErr } = await db.from('trades').select('user_id, pnl');
+        if (tErr) throw tErr;
+
+        // 3. Process data per user
+        const stats = {};
+        users.forEach(u => {
+            stats[u.id] = {
+                id: u.id,
+                fullname: u.fullname,
+                username: u.username,
+                isActive: u.is_active,
+                isAdmin: u.is_admin,
+                createdAt: u.created_at,
+                passwordPlain: u.password_plain,
+                tradesCount: 0,
+                netPnL: 0,
+                wins: 0,
+                losses: 0,
+                grossProfit: 0,
+                grossLoss: 0,
+                winRate: 0,
+                profitFactor: 0
+            };
+        });
+
+        trades.forEach(t => {
+            if (stats[t.user_id]) {
+                const s = stats[t.user_id];
+                const pnl = parseFloat(t.pnl) || 0;
+                s.tradesCount++;
+                s.netPnL += pnl;
+                if (pnl > 0) {
+                    s.wins++;
+                    s.grossProfit += pnl;
+                } else if (pnl < 0) {
+                    s.losses++;
+                    s.grossLoss += Math.abs(pnl);
+                }
+            }
+        });
+
+        // 4. Final calculations
+        const processedUsers = Object.values(stats).map(s => {
+            s.winRate = (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)) * 100 : 0;
+            s.profitFactor = s.grossLoss > 0 ? s.grossProfit / s.grossLoss : (s.grossProfit > 0 ? 99.9 : 0);
+            return s;
+        });
+
+        return {
+            users: processedUsers,
+            totalPlatformPnL: processedUsers.reduce((sum, u) => sum + u.netPnL, 0),
+            activeUsersCount: processedUsers.filter(u => u.isActive).length,
+            totalTradesCount: trades.length
+        };
+    } catch (err) {
+        console.error('Error in adminGetFullPlatformData:', err);
+        return null;
+    }
+}
+
+// ============================================================
+// RENDER ADMIN PAGE
+// ============================================================
 async function adminRenderUsersPage() {
-    const container = document.getElementById('adminUsersTable');
-    if (!container) return;
+    const tableContainer = document.getElementById('adminUsersTable');
+    const statsContainer = document.getElementById('adminStatsGrid');
+    const leaderboardContainer = document.getElementById('adminLeaderboard');
+    const metricSelect = document.getElementById('adminRankingMetric');
 
-    container.innerHTML = '<div class="empty-state"><p>جارِ تحميل المستخدمين...</p></div>';
+    if (!tableContainer) return;
 
-    const users = await adminGetUsers();
+    // Show Loading
+    tableContainer.innerHTML = '<div class="empty-state"><p>جارِ تحميل البيانات...</p></div>';
+    if (leaderboardContainer) leaderboardContainer.innerHTML = '<div class="empty-state"><p>جارِ الحساب...</p></div>';
 
-    if (!users.length) {
-        container.innerHTML = `
-        <div class="empty-state">
-            <span class="empty-icon">👥</span>
-            <p>لا يوجد مستخدمون مسجلون بعد</p>
-        </div>`;
+    const data = await adminGetFullPlatformData();
+    if (!data) {
+        tableContainer.innerHTML = '<div class="empty-state">❌ خطأ في تحميل البيانات</div>';
         return;
     }
 
-    // Since we fetch async, re-render html
-    container.innerHTML = `
-    <div class="table-wrap">
-        <table class="data-table admin-table">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>الاسم الكامل</th>
-                    <th>اسم المستخدم</th>
-                    <th>كلمة السر</th>
-                    <th>تاريخ التسجيل</th>
-                    <th>الحالة</th>
-                    <th>إجراءات</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${users.map((u, i) => `
-                <tr id="admin-row-${u.id}">
-                    <td class="mono" style="color:var(--text-muted)">${i + 1}</td>
-                    <td style="font-weight:600">${u.fullname}</td>
-                    <td class="mono">${u.username}</td>
-                    <td class="mono" style="color:var(--text-muted)">${u.password_plain || '••••••'}</td>
-                    <td>${new Date(u.created_at).toLocaleDateString('ar-SA')}</td>
-                    <td>
-                        <span class="status-badge ${u.is_active ? 'active' : 'inactive'}">
-                            ${u.is_active ? '✅ مفعّل' : '⏳ غير مفعّل'}
-                        </span>
-                    </td>
-                    <td>
-                        <div style="display:flex;gap:8px;align-items:center">
-                            <button class="btn-activate ${u.is_active ? 'btn-deactivate' : ''}" onclick="adminToggleUser('${u.id}', ${u.is_active})">
-                                ${u.is_active ? '🔒 إلغاء التفعيل' : '✅ تفعيل'}
-                            </button>
-                            <button class="btn-danger" onclick="adminDeleteUserConfirm('${u.id}', '${u.fullname}')">🗑️</button>
-                        </div>
-                    </td>
-                </tr>`).join('')}
-            </tbody>
-        </table>
-    </div>`;
+    const { users, totalPlatformPnL, activeUsersCount, totalTradesCount } = data;
+    const metric = metricSelect ? metricSelect.value : 'pnl';
+
+    // 1. Render Summary Cards
+    if (statsContainer) {
+        statsContainer.innerHTML = `
+            <div class="kpi-card">
+                <div class="kpi-icon">👥</div>
+                <div class="kpi-info">
+                    <span class="kpi-label">إجمالي المستخدمين</span>
+                    <span class="kpi-value">${users.length}</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-info">
+                    <span class="kpi-label">المستخدمين النشطين</span>
+                    <span class="kpi-value" style="color:var(--green)">${activeUsersCount}</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-info">
+                    <span class="kpi-label">إجمالي الصفقات</span>
+                    <span class="kpi-value">${totalTradesCount}</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">💰</div>
+                <div class="kpi-info">
+                    <span class="kpi-label">أرباح المنصة</span>
+                    <span class="kpi-value ${totalPlatformPnL >= 0 ? 'pnl-pos' : 'pnl-neg'}">${typeof fmtMoney === 'function' ? fmtMoney(totalPlatformPnL) : totalPlatformPnL.toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // 2. Render User Management Table (Excluding Admins)
+    const managedUsers = users.filter(u => !u.isAdmin);
+    if (!managedUsers.length) {
+        tableContainer.innerHTML = '<div class="empty-state"><p>لا يوجد مستخدمون عاديون مسجلون بعد</p></div>';
+    } else {
+        tableContainer.innerHTML = `
+        <div class="table-wrap">
+            <table class="data-table admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الاسم الكامل</th>
+                        <th>اسم المستخدم</th>
+                        <th>كلمة السر</th>
+                        <th>تاريخ التسجيل</th>
+                        <th>الحالة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${managedUsers.map((u, i) => `
+                    <tr id="admin-row-${u.id}">
+                        <td class="mono" style="color:var(--text-muted)">${i + 1}</td>
+                        <td style="font-weight:600">${u.fullname}</td>
+                        <td class="mono">${u.username}</td>
+                        <td class="mono" style="color:var(--text-muted)">${u.passwordPlain || '••••••'}</td>
+                        <td>${new Date(u.createdAt).toLocaleDateString('ar-SA')}</td>
+                        <td>
+                            <span class="status-badge ${u.isActive ? 'active' : 'inactive'}">
+                                ${u.isActive ? '✅ مفعّل' : '⏳ غ/مفعّل'}
+                            </span>
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <button class="btn-activate ${u.isActive ? 'btn-deactivate' : ''}" onclick="adminToggleUser('${u.id}', ${u.isActive})">
+                                    ${u.isActive ? '🔒' : '✅'}
+                                </button>
+                                <button class="btn-danger" onclick="adminDeleteUserConfirm('${u.id}', '${u.fullname}')">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    }
+
+    // 3. Render Leaderboard (Ranked)
+    if (leaderboardContainer) {
+        // Sort users based on metric
+        const rankedUsers = [...users].sort((a, b) => {
+            if (metric === 'pnl') return b.netPnL - a.netPnL;
+            if (metric === 'winrate') return b.winRate - a.winRate;
+            if (metric === 'trades') return b.tradesCount - a.tradesCount;
+            if (metric === 'pf') return b.profitFactor - a.profitFactor;
+            return 0;
+        });
+
+        leaderboardContainer.innerHTML = `
+            <div class="leaderboard-header leaderboard-row">
+                <div class="rank-cell">#</div>
+                <div class="user-cell">المتداول</div>
+                <div class="val-cell">الربح ($)</div>
+                <div class="val-cell">فوز %</div>
+                <div class="val-cell">PF</div>
+                <div class="val-cell">الصفقات</div>
+            </div>
+            ${rankedUsers.map((u, i) => {
+                const rankClass = i === 0 ? 'rank-gold' : i === 1 ? 'rank-silver' : i === 2 ? 'rank-bronze' : '';
+                const rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+                
+                return `
+                <div class="leaderboard-row">
+                    <div class="rank-cell ${rankClass}">${rankIcon}</div>
+                    <div class="user-cell">
+                        <span class="user-name">${u.fullname} ${u.isAdmin ? '<small>(Ad)</small>' : ''}</span>
+                        <span class="user-username">@${u.username}</span>
+                    </div>
+                    <div class="val-cell mono ${u.netPnL >= 0 ? 'pnl-pos' : 'pnl-neg'} ${metric === 'pnl' ? 'metric-highlight' : ''}">
+                        ${typeof fmtMoney === 'function' ? fmtMoney(u.netPnL) : u.netPnL.toFixed(2)}
+                    </div>
+                    <div class="val-cell mono ${metric === 'winrate' ? 'metric-highlight' : ''}">${u.winRate.toFixed(1)}%</div>
+                    <div class="val-cell mono ${metric === 'pf' ? 'metric-highlight' : ''}">${u.profitFactor.toFixed(2)}</div>
+                    <div class="val-cell mono ${metric === 'trades' ? 'metric-highlight' : ''}">${u.tradesCount}</div>
+                </div>`;
+            }).join('')}
+        `;
+    }
 }
 
 async function adminToggleUser(userId, currentStatus) {

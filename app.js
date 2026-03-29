@@ -316,6 +316,14 @@ function tradesByAccount(accountId) {
 // SIDEBAR & NAVIGATION
 // ============================================================
 function switchPage(page) {
+    const user = authCurrentUser();
+    // الأمن: منع الوصول لغير الأدمن
+    if (page === 'admin' && (!user || !user.isAdmin)) {
+        if (typeof showToast === 'function') showToast('🚫 غير مسموح بالوصول لصفحة الأدمن');
+        switchPage('dashboard');
+        return;
+    }
+
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 

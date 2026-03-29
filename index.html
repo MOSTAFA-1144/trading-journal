@@ -13,6 +13,7 @@
         rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="auth.css" />
+    <link rel="stylesheet" href="admin.css" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico" />
 </head>
@@ -553,11 +554,42 @@
                     <h1 class="admin-title">👑 إدارة المستخدمين</h1>
                     <span class="admin-badge">🛡️ لوحة الأدمن</span>
                 </div>
-                <div class="section-card">
-                    <div id="adminUsersTable">
-                        <div class="empty-state">
-                            <span class="empty-icon">👥</span>
-                            <p>لا يوجد مستخدمون مسجلون بعد</p>
+
+                <!-- Admin Summary Statistics -->
+                <div class="kpi-grid admin-stats-grid" id="adminStatsGrid">
+                    <!-- Dynamic Stats: Total Users, Active, Inactive, Total Platform Profit -->
+                </div>
+
+                <div class="admin-main-layout">
+                    <!-- User Management Table -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h2 class="section-title">👥 قائمة المستخدمين والتحكم</h2>
+                        </div>
+                        <div id="adminUsersTable">
+                            <div class="empty-state">
+                                <span class="empty-icon">👥</span>
+                                <p>لا يوجد مستخدمون مسجلون بعد</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leaderboard / Ranking Section -->
+                    <div class="section-card admin-leaderboard-card">
+                        <div class="section-header">
+                            <h2 class="section-title">🏆 ترتيب المتداولين (Leaderboard)</h2>
+                            <div class="filter-row">
+                                <label style="font-size:0.85rem; color:var(--text-secondary)">ترتيب حسب:</label>
+                                <select class="filter-select" id="adminRankingMetric" onchange="adminRenderUsersPage()">
+                                    <option value="pnl">إجمالي الربح ($)</option>
+                                    <option value="winrate">نسبة الفوز (%)</option>
+                                    <option value="pf">عامل الربح (PF)</option>
+                                    <option value="trades">عدد الصفقات</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="adminLeaderboard">
+                            <!-- Dynamic Leaderboard -->
                         </div>
                     </div>
                 </div>
