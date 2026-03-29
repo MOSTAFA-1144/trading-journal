@@ -369,32 +369,62 @@ document.getElementById('sidebarToggle').addEventListener('click', () => {
     const main = document.getElementById('mainContent');
     sidebar.classList.toggle('collapsed');
     main.classList.toggle('sidebar-collapsed');
+    
+    // Update toggle button arrow icon
+    document.getElementById('sidebarToggle').textContent = sidebar.classList.contains('collapsed') ? '›' : '‹';
+
+    // Trigger chart resize after transition
+    setTimeout(() => {
+        if (typeof equityChartInstance !== 'undefined' && equityChartInstance) {
+            equityChartInstance.resize();
+        }
+        if (typeof monthlyChartInstance !== 'undefined' && monthlyChartInstance) {
+            monthlyChartInstance.resize();
+        }
+        window.dispatchEvent(new Event('resize'));
+    }, 450);
 });
 
-document.getElementById('menuBtn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const sidebar = document.getElementById('sidebar');
-    const main = document.getElementById('mainContent');
-    const overlay = document.getElementById('mobileOverlay');
-    
-    sidebar.classList.toggle('collapsed');
-    sidebar.classList.toggle('mobile-open');
-    main.classList.toggle('sidebar-collapsed');
-    
-    if (overlay) {
-        overlay.classList.toggle('active');
-    }
-});
+// Mobile Menu Toggle
+const menuBtn = document.getElementById('menuBtn');
+if (menuBtn) {
+    menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('mobileOverlay');
+        if (sidebar) sidebar.classList.toggle('mobile-open');
+        if (overlay) overlay.classList.toggle('active');
+    });
+}
+
+// Robust Chart Resizing on Sidebar Toggle
+const mainContentEl = document.getElementById('mainContent');
+if (mainContentEl) {
+    mainContentEl.addEventListener('transitionend', (e) => {
+        // Check if the transitioned property affects layout
+        if (e.propertyName === 'margin-right' || e.propertyName === 'margin-left' || e.propertyName === 'width') {
+            if (typeof equityChartInstance !== 'undefined' && equityChartInstance) {
+                equityChartInstance.resize();
+            }
+            if (typeof monthlyChartInstance !== 'undefined' && monthlyChartInstance) {
+                monthlyChartInstance.resize();
+            }
+            // Trigger a global resize event for other components
+            window.dispatchEvent(new Event('resize'));
+        }
+    });
+}
+
+
 
 // Close sidebar on click outside in mobile
 document.addEventListener('click', (e) => {
     const sidebar = document.getElementById('sidebar');
-    const menuBtn = document.getElementById('menuBtn');
     const overlay = document.getElementById('mobileOverlay');
     
     if (sidebar && sidebar.classList.contains('mobile-open')) {
-        // If click is not inside sidebar and not on the menu button
-        if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+        // If click is not inside sidebar
+        if (!sidebar.contains(e.target)) {
             sidebar.classList.remove('mobile-open');
             sidebar.classList.add('collapsed');
             document.getElementById('mainContent').classList.remove('sidebar-collapsed');
