@@ -683,7 +683,11 @@
                     <label>ملاحظات</label>
                     <textarea id="a_notes" rows="2" placeholder="أي ملاحظات عن الحساب..."></textarea>
                 </div>
-                <div class="modal-footer">
+                <div class="form-group" style="display:flex; align-items:center; gap:10px; margin-top:10px; background: rgba(52, 152, 219, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(52, 152, 219, 0.3);">
+                    <input type="checkbox" id="a_mt5" style="width:18px;height:18px;cursor:pointer;" />
+                    <label for="a_mt5" style="margin:0;cursor:pointer;color:var(--gold);font-weight:600;">🤖 ربط هذا الحساب مع MetaTrader 5 التلقائي</label>
+                </div>
+                <div class="modal-footer" style="margin-top: 20px;">
                     <button type="button" class="btn-ghost" onclick="closeAccountModal()">إلغاء</button>
                     <button type="submit" class="btn-primary">💾 حفظ الحساب</button>
                 </div>
@@ -727,6 +731,51 @@
                     <button type="submit" class="btn-primary">💾 حفظ التعديلات</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL: MT5 SETUP ===== -->
+    <div class="modal-overlay" id="mt5ModalOverlay" onclick="closeModalOnOverlay(event, 'mt5ModalOverlay')">
+        <div class="modal modal-lg" id="mt5Modal">
+            <div class="modal-header">
+                <h2 class="modal-title">🤖 إعدادات MetaTrader 5</h2>
+                <button class="modal-close" onclick="closeMt5Modal()">✕</button>
+            </div>
+            
+            <div class="form-grid" style="margin-top:20px;">
+                <div class="form-group full-width" style="background:var(--bg-lighter); padding:15px; border-radius:8px; border:1px dashed var(--gold);">
+                    <label style="color:var(--text-primary); font-size:1.1rem;">🔑 مفتاح API الخاص بك (لا تشاركه مع أحد!)</label>
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <input type="text" id="mt5ApiKey" readonly style="flex:1; background:var(--bg-dark); color:var(--green); font-family:monospace; font-size:1rem; padding:10px; border:none; border-radius:4px;" />
+                        <button class="btn-ghost" style="border: 1px solid var(--border-color);" onclick="copyTextToClipboard('mt5ApiKey')">📄 نسخ</button>
+                    </div>
+                </div>
+
+                <div class="form-group full-width">
+                    <h3>خطوات التشغيل في MT5:</h3>
+                    <ol style="line-height:1.8; margin-top:10px; padding-right:20px; color:var(--text-secondary);">
+                        <li>افتح <b>MetaTrader 5</b>، ثم اذهب إلى <code>Tools -> Options -> Expert Advisors</code>.</li>
+                        <li>فعّل خيار <code>Allow WebRequests for listed URL:</code>.</li>
+                        <li>أضف عنوان API الخاص بمشروعك (مثال: <code>https://YOUR_SUPABASE_URL/functions/v1/mt5-sync</code>) واضغط OK.</li>
+                        <li>في MT5، اضغط على <b>F4</b> لفتح <i>MetaEditor</i>.</li>
+                        <li>أنشئ <b>Expert Advisor</b> جديد، انسخ الكود بالأسفل، وألصقه بالكامل.</li>
+                        <li>اضغط F7 (Compile). تأكد أنه لا يوجد أخطاء.</li>
+                        <li>اسحب الـ EA وضعه على أي شارت (مثلاً EURUSD). تأكد أن زر Algo Trading مفعّل (أخضر).</li>
+                    </ol>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label>💻 كود الـ Expert Advisor المخصص لك (MQL5)</label>
+                    <div style="position:relative; margin-top:10px;">
+                        <textarea id="mt5EaCode" readonly rows="12" style="width:100%; background:var(--bg-dark); color:var(--text-muted); font-family:monospace; padding:15px; font-size:0.9rem; border-radius:8px; resize:vertical; line-height:1.5; direction:ltr; text-align:left;"></textarea>
+                        <button class="btn-primary" style="position:absolute; top:25px; right:15px; padding:5px 15px; font-size:0.8rem;" onclick="copyTextToClipboard('mt5EaCode')">📄 نسخ الكود</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="margin-top:20px;">
+                <button type="button" class="btn-primary" onclick="closeMt5Modal()">تم</button>
+            </div>
         </div>
     </div>
 

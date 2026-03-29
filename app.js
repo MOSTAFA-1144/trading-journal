@@ -166,6 +166,136 @@ function accountTypeBadgeClass(type) {
     return 'type-badge-' + (type || '').replace(/\s/g, '-');
 }
 
+// MT5 HELPER FUNCTIONS
+function openMt5Modal(accountId) {
+    const acc = accountById(accountId);
+    if (!acc) return;
+
+    document.getElementById('mt5ApiKey').value = acc.mt5_api_key || 'لم يتم توليد مفتاح بعد';
+    
+    // Generate the EA Code
+    const supabaseUrl = SUPABASE_URL;
+    const apiUrl = `${supabaseUrl}/functions/v1/mt5-sync`;
+    const eaCode = generateMql5Code(acc.name, acc.mt5_api_key, apiUrl);
+    document.getElementById('mt5EaCode').value = eaCode;
+
+    document.getElementById('mt5ModalOverlay').classList.add('active');
+}
+
+function closeMt5Modal() {
+    document.getElementById('mt5ModalOverlay').classList.remove('active');
+}
+
+function copyTextToClipboard(id) {
+    const el = document.getElementById(id);
+    el.select();
+    document.execCommand('copy');
+    showToast('✅ تم النسخ إلى الحافظة');
+}
+
+function generateMql5Code(accountName, apiKey, apiUrl) {
+    return `//+------------------------------------------------------------------+
+//|                                              MT5_Trade_Sync.mq5  |
+//|                                  Copyright 2026, Notion Clone    |
+//|                                       https://your-site.com      |
+//+------------------------------------------------------------------+
+#property copyright "Notion Clone"
+#property link      "https://your-site.com"
+#property version   "1.00"
+#property strict
+
+//--- input parameters
+input string   InpApiKey = "${apiKey}"; // API Key
+input string   InpApiUrl = "${apiUrl}"; // API URL
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   Print("MT5 Sync: Started for Account: ${accountName}");
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   Print("MT5 Sync: Stopped");
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+}
+
+//+------------------------------------------------------------------+
+//| Trade function                                                   |
+//+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction& trans,
+                        const MqlTradeRequest& request,
+                        const MqlTradeResult& result)
+{
+   // Check if it's a closed trade (deal)
+   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
+   {
+      ulong ticket = trans.deal;
+      if(HistoryDealSelect(ticket))
+      {
+         long entryType = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+         if(entryType == DEAL_ENTRY_OUT) // Deal closed
+         {
+            SendTradeToApi(ticket);
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Send trade data via WebRequest                                   |
+//+------------------------------------------------------------------+
+void SendTradeToApi(ulong ticket)
+{
+   string symbol = HistoryDealGetString(ticket, DEAL_SYMBOL);
+   long type = HistoryDealGetInteger(ticket, DEAL_TYPE);
+   double lot = HistoryDealGetDouble(ticket, DEAL_VOLUME);
+   double entryPrice = HistoryDealGetDouble(ticket, DEAL_PRICE);
+   double pnl = HistoryDealGetDouble(ticket, DEAL_PROFIT) + HistoryDealGetDouble(ticket, DEAL_COMMISSION) + HistoryDealGetDouble(ticket, DEAL_SWAP);
+   datetime closeTime = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+   
+   // Find the open price (simplified)
+   double openPrice = 0;
+   HistorySelect(closeTime - 86400*30, closeTime); // Look back 30 days
+   // This is a basic lookup, more robust logic can be added
+   
+   string direction = (type == DEAL_TYPE_SELL) ? "buy" : "sell"; // Reverse of closing deal
+   
+   string payload = StringFormat(
+      "{\\"ticket\\":\\"%d\\", \\"symbol\\":\\"%s\\", \\"direction\\":\\"%s\\", \\"lot\\":%.2f, \\"entry\\":%.5f, \\"exit_price\\":%.5f, \\"pnl\\":%.2f, \\"close_time\\":\\"%s\\"}",
+      ticket, symbol, direction, lot, entryPrice, entryPrice, pnl, TimeToString(closeTime, TIME_DATE|TIME_SECONDS)
+   );
+
+   char data[];
+   StringToCharArray(payload, data, 0, WHOLE_ARRAY, CP_UTF8);
+   char result[];
+   string result_headers;
+   
+   string headers = "Content-Type: application/json\\r\\nx-mt5-api-key: " + InpApiKey + "\\r\\n";
+   
+   int res = WebRequest("POST", InpApiUrl, headers, 10000, data, result, result_headers);
+   
+   if(res == 200)
+      Print("MT5 Sync: Trade sent successfully. Ticket: ", ticket);
+   else
+      Print("MT5 Sync: Error sending trade. Code: ", res, " Result: ", CharArrayToString(result));
+}
+//+------------------------------------------------------------------+
+`;
+}
+
 function formatDate(dateStr) {
     if (!dateStr) return '—';
     try {
@@ -300,9 +430,11 @@ function openAccountModal(id) {
             document.getElementById('a_type').value = acc.type;
             document.getElementById('a_balance').value = acc.initialBalance;
             document.getElementById('a_notes').value = acc.notes || '';
+            document.getElementById('a_mt5').checked = acc.mt5_enabled || false;
             document.getElementById('accountModalTitle').textContent = '✏️ تعديل الحساب';
         }
     } else {
+        document.getElementById('a_mt5').checked = false;
         document.getElementById('accountModalTitle').textContent = '💼 إضافة حساب جديد';
     }
 
@@ -338,8 +470,19 @@ async function saveAccount(e) {
             name,
             type,
             initial_balance: balance,
-            notes
+            notes,
+            mt5_enabled: document.getElementById('a_mt5').checked
         };
+
+        // If MT5 is enabled and no key exists, generate one
+        const existingAcc = accountId ? accountById(accountId) : null;
+        if (dbPayload.mt5_enabled) {
+            if (existingAcc && existingAcc.mt5_api_key) {
+                dbPayload.mt5_api_key = existingAcc.mt5_api_key;
+            } else {
+                dbPayload.mt5_api_key = uid().replace(/-/g, '') + uid().replace(/-/g, ''); // Long unique key
+            }
+        }
 
         if (accountId) {
             const { error } = await db.from('accounts').update(dbPayload).eq('id', accountId);
@@ -352,6 +495,8 @@ async function saveAccount(e) {
                 existing.type = dbPayload.type;
                 existing.initialBalance = Number(dbPayload.initial_balance);
                 existing.notes = dbPayload.notes;
+                existing.mt5_enabled = dbPayload.mt5_enabled;
+                if (dbPayload.mt5_api_key) existing.mt5_api_key = dbPayload.mt5_api_key;
             }
         } else {
             accountId = uid();
@@ -366,6 +511,8 @@ async function saveAccount(e) {
                 type: dbPayload.type,
                 initialBalance: Number(dbPayload.initial_balance),
                 notes: dbPayload.notes,
+                mt5_enabled: dbPayload.mt5_enabled,
+                mt5_api_key: dbPayload.mt5_api_key,
                 createdAt: new Date().toISOString()
             });
         }
@@ -542,8 +689,6 @@ async function saveTrade(e) {
             exit_price: exit,
             target,
             stop,
-            lot,
-            notes,
             lot,
             notes,
             pnl,
@@ -1257,6 +1402,7 @@ function renderAccountsPage() {
       <div class="account-actions">
         <button class="btn-edit" onclick="openAccountModal('${acc.id}')">✏️ تعديل</button>
         <button class="btn-danger" onclick="deleteAccount('${acc.id}')">🗑️ حذف</button>
+        ${acc.mt5_enabled ? `<button class="btn-primary" style="margin-right:8px; font-size:.78rem; background:var(--blue); border-color:var(--blue);" onclick="openMt5Modal('${acc.id}')">🤖 إعدادات MT5</button>` : ''}
         <button class="btn-ghost" style="margin-right:auto;font-size:.78rem" onclick="switchPage('trades');document.getElementById('filterAccount').value='${acc.id}';renderTradesTable()">عرض الصفقات ←</button>
       </div>
     </div>`;
@@ -1990,30 +2136,36 @@ function renderCalendar(trades) {
     
     if (!calendarMonthYear || !statsCalendar) return;
 
+    // Clear stale state immediately
+    statsCalendar.innerHTML = '';
+    if (weeklySummary) weeklySummary.innerHTML = '';
+
     const year = calendarDate.getFullYear();
     const month = calendarDate.getMonth();
 
     // Show month number / year as requested
     calendarMonthYear.textContent = `${String(month + 1).padStart(2, '0')} / ${year}`;
 
-    // Group trades by date for this month
+    // Group trades by date for this month (Standardize date key)
     const dailyData = {};
     trades.forEach(t => {
-        const d = new Date(t.date);
-        if (d.getFullYear() === year && d.getMonth() === month) {
-            const dateStr = t.date; // Use original date string YYYY-MM-DD
-            if (!dailyData[dateStr]) dailyData[dateStr] = { pnl: 0, count: 0, wins: 0, losses: 0, lot: 0, trades: [] };
-            dailyData[dateStr].pnl += (t.pnl || 0);
-            dailyData[dateStr].count++;
-            if (t.pnl > 0) dailyData[dateStr].wins++;
-            else if (t.pnl < 0) dailyData[dateStr].losses++;
-            dailyData[dateStr].lot += (t.lot || 0);
-            dailyData[dateStr].trades.push(t);
-        }
+        if (!t || !t.date) return;
+        try {
+            const d = new Date(t.date);
+            if (d.getFullYear() === year && d.getMonth() === month) {
+                // Ensure date string is in YYYY-MM-DD format for internal mapping
+                const dKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                if (!dailyData[dKey]) dailyData[dKey] = { pnl: 0, count: 0, wins: 0, losses: 0, lot: 0, trades: [] };
+                dailyData[dKey].pnl += (Number(t.pnl) || 0);
+                dailyData[dKey].count++;
+                if (Number(t.pnl) > 0) dailyData[dKey].wins++;
+                else if (Number(t.pnl) < 0) dailyData[dKey].losses++;
+                dailyData[dKey].lot += (Number(t.lot) || 0);
+                dailyData[dKey].trades.push(t);
+            }
+        } catch (e) { console.error('Error grouping trade for calendar:', e); }
     });
 
-    // Calendar Grid Logic
-    statsCalendar.innerHTML = '';
     const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -2029,49 +2181,54 @@ function renderCalendar(trades) {
 
     // Current month days
     for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const data = dailyData[dateStr];
-        const dayCell = document.createElement('div');
-        dayCell.className = 'calendar-day';
-        
-        let html = `<span class="day-num">${day}</span>`;
-        
-        if (data) {
-            const pnlClassStr = data.pnl > 0 ? 'pos' : data.pnl < 0 ? 'neg' : '';
-            const statusClass = data.pnl > 0 ? 'profit' : data.pnl < 0 ? 'loss' : '';
-            dayCell.classList.add('has-trades', statusClass);
+        try {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const data = dailyData[dateStr];
+            const dayCell = document.createElement('div');
+            dayCell.className = 'calendar-day';
             
-            html += `
-                <div class="day-content">
-                    <span class="day-pnl ${pnlClassStr}">${fmtMoney(data.pnl)}</span>
-                    <span class="day-trades">${data.count} صفقات</span>
-                </div>
-                <div class="day-popover">
-                    <div class="popover-header">${formatDate(dateStr)}</div>
-                    <div class="popover-row"><span>إجمالي الربح/الخسارة:</span><span class="${pnlClassStr}">${fmtMoney(data.pnl)}</span></div>
-                    <div class="popover-row"><span>عدد الصفقات:</span><span>${data.count}</span></div>
-                    <div class="popover-row"><span>رابحة:</span><span class="pnl-pos">${data.wins}</span></div>
-                    <div class="popover-row"><span>خاسرة:</span><span class="pnl-neg">${data.losses}</span></div>
-                    <div class="popover-row"><span>حجم اللوت:</span><span>${data.lot.toFixed(2)}</span></div>
-                </div>
-            `;
+            let html = `<span class="day-num">${day}</span>`;
+            
+            if (data) {
+                const pnlClassStr = data.pnl > 0 ? 'pos' : data.pnl < 0 ? 'neg' : '';
+                const statusClass = data.pnl > 0 ? 'profit' : data.pnl < 0 ? 'loss' : '';
+                dayCell.classList.add('has-trades', statusClass);
+                
+                html += `
+                    <div class="day-content">
+                        <span class="day-pnl ${pnlClassStr}">${fmtMoney(data.pnl)}</span>
+                        <span class="day-trades">${data.count} صفقات</span>
+                    </div>
+                    <div class="day-popover">
+                        <div class="popover-header">${formatDate(dateStr)}</div>
+                        <div class="popover-row"><span>إجمالي الربح/الخسارة:</span><span class="${pnlClassStr}">${fmtMoney(data.pnl)}</span></div>
+                        <div class="popover-row"><span>عدد الصفقات:</span><span>${data.count}</span></div>
+                        <div class="popover-row"><span>رابحة:</span><span class="pnl-pos">${data.wins}</span></div>
+                        <div class="popover-row"><span>خاسرة:</span><span class="pnl-neg">${data.losses}</span></div>
+                        <div class="popover-row"><span>حجم اللوت:</span><span>${(data.lot || 0).toFixed(2)}</span></div>
+                    </div>
+                `;
 
-            // Track weekly summary
-            const weekIdx = Math.floor((day + firstDay - 1) / 7);
-            if (weekIdx < 6) {
-                weeklyPnL[weekIdx] += data.pnl;
-                weeklyTrades[weekIdx] += data.count;
+                // Track weekly summary
+                const weekIdx = Math.floor((day + firstDay - 1) / 7);
+                if (weekIdx >= 0 && weekIdx < 6) {
+                    weeklyPnL[weekIdx] += data.pnl;
+                    weeklyTrades[weekIdx] += data.count;
+                }
             }
+            
+            dayCell.innerHTML = html;
+            statsCalendar.appendChild(dayCell);
+        } catch (dayError) {
+            console.error(`Error rendering calendar day ${day}:`, dayError);
         }
-        
-        dayCell.innerHTML = html;
-        statsCalendar.appendChild(dayCell);
     }
 
-    // Weekly Summary Sidebar
+    // Weekly Summary Sidebar rendering
     if (weeklySummary) {
+        const lastWeekIdx = Math.floor((daysInMonth + firstDay - 1) / 7);
         weeklySummary.innerHTML = weeklyPnL.map((pnl, i) => {
-            if (i > Math.floor((daysInMonth + firstDay - 1) / 7)) return '';
+            if (i > lastWeekIdx) return '';
             return `
                 <div class="week-stat">
                     <span class="week-label">الأسبوع ${i + 1}</span>
