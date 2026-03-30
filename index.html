@@ -112,6 +112,10 @@
                     <span class="nav-icon">📉</span>
                     <span class="nav-label">الإحصائيات</span>
                 </button>
+                <button class="nav-item" data-page="rules" id="nav-rules">
+                    <span class="nav-icon">📜</span>
+                    <span class="nav-label">قوانين الصفقة</span>
+                </button>
                 <!-- Admin Only -->
                 <button class="nav-item" data-page="admin" id="nav-admin" style="display:none">
                     <span class="nav-icon">👑</span>
@@ -233,11 +237,12 @@
                                     <th>الخروج</th>
                                     <th>الربح/الخسارة</th>
                                     <th>النتيجة</th>
+                                    <th>القوانين</th>
                                 </tr>
                             </thead>
                             <tbody id="recentTradesBody">
                                 <tr>
-                                    <td colspan="8" class="empty-row">لا توجد صفقات بعد. ابدأ بإضافة صفقتك الأولى!</td>
+                                    <td colspan="9" class="empty-row">لا توجد صفقات بعد. ابدأ بإضافة صفقتك الأولى!</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -324,12 +329,13 @@
                                 <th class="sortable" onclick="handleSort('pipSL')">PIP الستوب <span class="sort-icon"></span></th>
                                 <th class="sortable" onclick="handleSort('pnl')">الربح / الخسارة $ <span class="sort-icon"></span></th>
                                 <th class="sortable" onclick="handleSort('result')">النتيجة <span class="sort-icon"></span></th>
+                                <th>القوانين</th>
                                 <th>إجراءات</th>
                             </tr>
                         </thead>
                         <tbody id="tradesTableBody">
                             <tr>
-                                <td colspan="15" class="empty-row">لا توجد صفقات مسجلة</td>
+                                <td colspan="16" class="empty-row">لا توجد صفقات مسجلة</td>
                             </tr>
                         </tbody>
                     </table>
@@ -595,6 +601,28 @@
                 </div>
             </section>
 
+            <!-- ===== PAGE: RULES ===== -->
+            <section class="page" id="page-rules">
+                <div class="page-header-bar">
+                    <h1 class="page-title">📜 قوانين وشروط الصفقة</h1>
+                    <button class="btn-primary" onclick="openRuleModal()">＋ إضافة قانون جديد</button>
+                </div>
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2 class="section-title">قوانيني الخاصة</h2>
+                        <p class="section-sub">هذه القوانين تظهر لك عند إضافة أي صفقة لكي تختار ما تم تطبيقه منها.</p>
+                    </div>
+                    <div class="rules-list-grid" id="rulesListGrid">
+                        <!-- Rules injected by JS -->
+                        <div class="empty-state">
+                            <span class="empty-icon">📜</span>
+                            <p>لا توجد قوانين مضافة بعد</p>
+                            <button class="btn-primary" onclick="openRuleModal()">أضف قانونك الأول</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -663,6 +691,13 @@
                             <label class="tag-checkbox"><input type="checkbox" value="صبر"> 🧘 صبر</label>
                             <label class="tag-checkbox"><input type="checkbox" value="انتقام"> 😡 انتقام</label>
                             <label class="tag-checkbox"><input type="checkbox" value="تخمين"> 🎲 تخمين</label>
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>قوانين وشروط الصفقة (اختيار القواعد المطبقة)</label>
+                        <div class="tags-input-container rules-selection-container" id="rulesSelectionContainer">
+                            <!-- Injected by JS -->
+                            <p style="color: var(--text-muted); font-size: 0.85rem;">يرجى إضافة قوانين من صفحة "قوانين الصفقة" أولاً.</p>
                         </div>
                     </div>
                     <div class="form-group full-width">
@@ -829,6 +864,30 @@
 
     <!-- APP SCRIPT -->
     <script src="app.js"></script>
+    <!-- ===== MODAL: ADD/EDIT RULE ===== -->
+    <div class="modal-overlay" id="ruleModalOverlay" onclick="closeModalOnOverlay(event, 'ruleModalOverlay')">
+        <div class="modal modal-sm" id="ruleModal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="ruleModalTitle">📜 إضافة قانون تداول</h2>
+                <button class="modal-close" onclick="closeRuleModal()">✕</button>
+            </div>
+            <form class="modal-form" id="ruleForm" onsubmit="saveRule(event)">
+                <div class="form-group">
+                    <label>عنوان القانون *</label>
+                    <input type="text" id="r_title" placeholder="مثال: سحب سيولة" required />
+                </div>
+                <div class="form-group">
+                    <label>وصف القانون / الشرح</label>
+                    <textarea id="r_description" rows="3" placeholder="مثال: عندما يتم سحب قمة بذيل..."></textarea>
+                </div>
+                <div class="modal-footer" style="margin-top: 20px;">
+                    <button type="button" class="btn-ghost" onclick="closeRuleModal()">إلغاء</button>
+                    <button type="submit" class="btn-primary">💾 حفظ القانون</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </body>
 
 </html>

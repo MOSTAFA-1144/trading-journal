@@ -10,8 +10,10 @@
 let state = {
     accounts: [],
     trades: [],
+    rules: [],
     editingTradeId: null,
     editingAccountId: null,
+    editingRuleId: null,
     // Sorting & Pagination state
     sortColumn: 'date',
     sortDirection: 'desc',
@@ -50,13 +52,15 @@ async function loadState() {
     }
 
     try {
-        const [accRes, trRes] = await Promise.all([
+        const [accRes, trRes, ruleRes] = await Promise.all([
             fetchAllRecords('accounts', user.id),
-            fetchAllRecords('trades', user.id)
+            fetchAllRecords('trades', user.id),
+            fetchAllRecords('trading_rules', user.id)
         ]);
 
         if (accRes.error) throw accRes.error;
         if (trRes.error) throw trRes.error;
+        if (ruleRes.error) throw ruleRes.error;
 
         // Map DB fields back to camelCase state
         state.accounts = (accRes.data || []).map(a => ({
@@ -86,7 +90,15 @@ async function loadState() {
             notes: t.notes,
             image: t.image,
             tags: t.tags || '',
+            rules: t.rules || '',
             createdAt: t.created_at
+        }));
+
+        state.rules = (ruleRes.data || []).map(r => ({
+            id: r.id,
+            title: r.title,
+            description: r.description,
+            createdAt: r.created_at
         }));
     } catch (err) {
         console.error('Error loading data from Supabase:', err);
@@ -340,6 +352,7 @@ function switchPage(page) {
         gallery: 'معرض البطاقات',
         stats: 'الإحصائيات',
         admin: '👑 إدارة المستخدمين',
+        rules: '📜 قوانين الصفقة',
     };
     document.getElementById('topbarTitle').textContent = titles[page] || '';
 
@@ -354,6 +367,7 @@ function switchPage(page) {
     if (page === 'gallery') { populateGalleryFilters(); renderGallery(); }
     if (page === 'stats') renderStats();
     if (page === 'admin') adminRenderUsersPage();
+    if (page === 'rules') renderRulesPage();
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -590,6 +604,137 @@ async function deleteAccount(id) {
 }
 
 // ============================================================
+// TRADING RULES MODAL
+// ============================================================
+function openRuleModal(id) {
+    state.editingRuleId = id || null;
+    const form = document.getElementById('ruleForm');
+    form.reset();
+
+    if (id) {
+        const rule = state.rules.find(r => r.id === id);
+        if (rule) {
+            document.getElementById('r_title').value = rule.title;
+            document.getElementById('r_description').value = rule.description || '';
+            document.getElementById('ruleModalTitle').textContent = '✏️ تعديل قانون التداول';
+        }
+    } else {
+        document.getElementById('ruleModalTitle').textContent = '📜 إضافة قانون تداول';
+    }
+
+    document.getElementById('ruleModalOverlay').classList.add('active');
+}
+
+function closeRuleModal() {
+    document.getElementById('ruleModalOverlay').classList.remove('active');
+    state.editingRuleId = null;
+}
+
+async function saveRule(e) {
+    e.preventDefault();
+    const user = authCurrentUser();
+    if (!user) return;
+
+    const title = document.getElementById('r_title').value.trim();
+    const description = document.getElementById('r_description').value.trim();
+
+    if (!title) { showToast('⚠️ يرجى إدخال عنوان القانون'); return; }
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    const origText = btn.textContent;
+    btn.textContent = 'جارٍ الحفظ...';
+    btn.disabled = true;
+
+    try {
+        let ruleId = state.editingRuleId;
+        const dbPayload = {
+            user_id: user.id,
+            title,
+            description
+        };
+
+        if (ruleId) {
+            const { error } = await db.from('trading_rules').update(dbPayload).eq('id', ruleId);
+            if (error) throw error;
+            showToast('✅ تم تحديث القانون بنجاح');
+            
+            const existing = state.rules.find(r => r.id === ruleId);
+            if (existing) {
+                existing.title = dbPayload.title;
+                existing.description = dbPayload.description;
+            }
+        } else {
+            ruleId = uid();
+            dbPayload.id = ruleId;
+            const { error } = await db.from('trading_rules').insert([dbPayload]);
+            if (error) throw error;
+            showToast('✅ تم إضافة القانون بنجاح');
+            
+            state.rules.push({
+                id: dbPayload.id,
+                title: dbPayload.title,
+                description: dbPayload.description,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        closeRuleModal();
+        renderRulesPage();
+    } catch (err) {
+        console.error(err);
+        showToast('❌ حدث خطأ أثناء الحفظ');
+    } finally {
+        btn.textContent = origText;
+        btn.disabled = false;
+    }
+}
+
+async function deleteRule(id) {
+    if (!confirm('هل أنت متأكد من حذف هذا القانون؟')) return;
+    
+    try {
+        const { error } = await db.from('trading_rules').delete().eq('id', id);
+        if (error) throw error;
+        
+        state.rules = state.rules.filter(r => r.id !== id);
+        renderRulesPage();
+        showToast('🗑️ تم حذف القانون');
+    } catch (err) {
+        console.error(err);
+        showToast('❌ حدث خطأ أثناء الحذف');
+    }
+}
+
+function renderRulesPage() {
+    const grid = document.getElementById('rulesListGrid');
+    if (!grid) return;
+
+    if (state.rules.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <span class="empty-icon">📜</span>
+                <p>لا توجد قوانين مضافة بعد</p>
+                <button class="btn-primary" onclick="openRuleModal()">أضف قانونك الأول</button>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = state.rules.map(rule => `
+        <div class="rule-card">
+            <div class="rule-card-header">
+                <div class="rule-card-title">${rule.title}</div>
+            </div>
+            <div class="rule-card-description">${rule.description || 'لا يوجد شرح لهذا القانون.'}</div>
+            <div class="rule-card-actions">
+                <button class="btn-edit" onclick="openRuleModal('${rule.id}')">✏️ تعديل</button>
+                <button class="btn-danger" onclick="deleteRule('${rule.id}')">🗑️ حذف</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ============================================================
 // TRADE MODAL
 // ============================================================
 function openTradeModal(id) {
@@ -621,9 +766,13 @@ function openTradeModal(id) {
             document.querySelectorAll('#tagsContainer input').forEach(cb => {
                 cb.checked = tags.includes(cb.value);
             });
+
+            // Set rules
+            renderRulesSelection(tr.rules);
         }
     } else {
         document.getElementById('tradeModalTitle').textContent = '➕ إضافة صفقة جديدة';
+        renderRulesSelection('');
     }
 
     // Auto-title
@@ -733,7 +882,8 @@ async function saveTrade(e) {
             pip_tp: pipTP,
             pip_sl: pipSL,
             result,
-            tags: Array.from(document.querySelectorAll('#tagsContainer input:checked')).map(cb => cb.value).join(',')
+            tags: Array.from(document.querySelectorAll('#tagsContainer input:checked')).map(cb => cb.value).join(','),
+            rules: Array.from(document.querySelectorAll('#rulesSelectionContainer input:checked')).map(cb => cb.value).join(',')
         };
         if (imageDataUrl) dbPayload.image = imageDataUrl;
 
@@ -764,7 +914,8 @@ async function saveTrade(e) {
                     pipSL: dbPayload.pip_sl !== null ? Number(dbPayload.pip_sl) : null,
                     result: dbPayload.result,
                     notes: dbPayload.notes,
-                    tags: dbPayload.tags || ''
+                    tags: dbPayload.tags || '',
+                    rules: dbPayload.rules || ''
                 });
                 if (dbPayload.image) existing.image = dbPayload.image;
             }
@@ -793,6 +944,7 @@ async function saveTrade(e) {
                 notes: dbPayload.notes,
                 image: dbPayload.image || null,
                 tags: dbPayload.tags || '',
+                rules: dbPayload.rules || '',
                 createdAt: new Date().toISOString()
             });
         }
@@ -870,6 +1022,35 @@ function fileToBase64(file) {
     });
 }
 
+function renderRulesSelection(selectedRulesStr) {
+    const container = document.getElementById('rulesSelectionContainer');
+    if (!container) return;
+
+    if (state.rules.length === 0) {
+        container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem;">يرجى إضافة قوانين من صفحة "قوانين الصفقة" أولاً.</p>`;
+        return;
+    }
+
+    const selectedIds = (selectedRulesStr || '').split(',').filter(id => id);
+
+    container.innerHTML = state.rules.map(rule => `
+        <label class="rule-checkbox ${selectedIds.includes(rule.id) ? 'checked' : ''}" title="${rule.description || ''}">
+            <input type="checkbox" value="${rule.id}" ${selectedIds.includes(rule.id) ? 'checked' : ''} onchange="this.parentElement.classList.toggle('checked', this.checked)">
+            ${rule.title}
+        </label>
+    `).join('');
+}
+
+function getRuleBadges(rulesStr) {
+    if (!rulesStr) return '';
+    const ids = rulesStr.split(',').filter(id => id);
+    return ids.map(id => {
+        const rule = state.rules.find(r => r.id === id);
+        if (!rule) return '';
+        return `<span class="rule-badge" title="${rule.description || ''}">${rule.title}</span>`;
+    }).join('');
+}
+
 // ============================================================
 // VIEW TRADE MODAL
 // ============================================================
@@ -892,6 +1073,7 @@ function viewTrade(id) {
         ['PIP الهدف', tr.pipTP !== null && tr.pipTP !== undefined ? tr.pipTP + ' pip' : '—'],
         ['PIP الستوب', tr.pipSL !== null && tr.pipSL !== undefined ? tr.pipSL + ' pip' : '—'],
         ['الربح / الخسارة', fmtMoney(tr.pnl)],
+        ['القوانين المطبقة', getRuleBadges(tr.rules) || '—'],
     ];
 
     fields.forEach(([label, val]) => {
@@ -1169,6 +1351,7 @@ function renderTradeRows(tbodyId, trades, minimal) {
         <td class="mono">${tr.exit ? fmt(tr.exit) : '—'}</td>
         <td class="${pnlClass(tr.pnl)}">${tr.pnl !== null && tr.pnl !== undefined ? fmtMoney(tr.pnl) : '—'}</td>
         <td>${resultBadge(tr.result)}</td>
+        <td style="min-width: 150px;">${getRuleBadges(tr.rules)}</td>
       </tr>`;
         }
         return `<tr>
@@ -1186,6 +1369,7 @@ function renderTradeRows(tbodyId, trades, minimal) {
       <td class="mono">${tr.pipSL !== null && tr.pipSL !== undefined ? tr.pipSL : '—'}</td>
       <td class="${pnlClass(tr.pnl)}">${tr.pnl !== null && tr.pnl !== undefined ? fmtMoney(tr.pnl) : '—'}</td>
       <td>${resultBadge(tr.result)}</td>
+      <td>${getRuleBadges(tr.rules)}</td>
       <td>
         <div style="display:flex;gap:6px">
           <button class="btn-edit" onclick="openTradeModal('${tr.id}')">✏️</button>
